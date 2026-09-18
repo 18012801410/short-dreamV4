@@ -701,3 +701,25 @@ class TestGridCellField:
             version_no=1,
         )
         assert row.grid_cell is None
+
+
+def test_keyframe_description_override_takes_precedence() -> None:
+    """description_override 优先于 keyframe_description 与首镜回退。"""
+    from server.domain.entities import H3Prompt, Segment, Shot
+
+    seg = Segment(
+        segment_key="S01G01",
+        scene_id="S1",
+        index=1,
+        duration_sec=10,
+        shots=[
+            Shot(shot_no=1, cutpoint_sec=5, camera="wide", description="d1", action="a1"),
+            Shot(shot_no=2, cutpoint_sec=10, camera="close", description="d2", action="a2"),
+        ],
+        keyframe_description="整段开场描述",
+        h3_prompt=H3Prompt(text=""),
+    )
+    prompt = compile_keyframe_prompt(seg, {}, description_override="a2")
+    assert "a2" in prompt
+    assert "整段开场描述" not in prompt
+    assert "a1" not in prompt

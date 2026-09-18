@@ -449,6 +449,7 @@ def compile_keyframe_prompt(
     include_identity_anchors: bool = True,
     reference_bindings: list | None = None,
     aspect: str = "",
+    description_override: str = "",
 ) -> str:
     """编译段开场锚点关键帧的 **I2I 编辑指令**（TASK-031/036/045）。
 
@@ -466,9 +467,11 @@ def compile_keyframe_prompt(
 
     组织顺序：风格 → 画面描述 → 人数+逐人点名 → 背景 → 道具 → 参考图指称 →
     身份锁定 → 构图与画幅。无参考图（纯文生图）时退化为自足的画面描述 + 身份锚点。
+
+    多宫格逐格生成时传对应 shot 的动作描述（方案A：逐格生成+程序拼宫格）。
     """
     style = style_line.strip()
-    description = segment.keyframe_description.strip()
+    description = (description_override or segment.keyframe_description).strip()
     if not description:
         # 存量分镜/LLM 漏写：回退首镜的开场状态（action 开头或 action 前段）
         first = segment.shots[0]
