@@ -54,12 +54,13 @@ RELAY_ANCHOR_EN = (
 )
 
 # 宫格分镜板声明（<Picture 1>=宫格时注入）：官方 R2V 口径——声明视角/站位/镜序，
-# 并加"宫格本身不上画"护栏（防止 H3 把多格布局当成画面内容渲染成分屏）
+# 并加"宫格本身不上画"护栏（防止 H3 把多格布局当成画面内容渲染成分屏）。
+# 与 RELAY_ANCHOR_EN 互斥：宫格口径不叠加单帧锚定，由首格承担开场帧语义。
 STORYBOARD_ANCHOR_EN = (
     "<Picture 1> is a storyboard reference for the shots of this segment, "
-    "defining the viewpoint, subject placement, and shot order; the target "
-    "video is a single continuous take, and the grid layout of <Picture 1> "
-    "itself never appears on screen."
+    "defining the viewpoint, subject placement, and shot order; frame 0 "
+    "must match the first cell of <Picture 1>, and the grid layout of "
+    "<Picture 1> itself never appears on screen."
 )
 
 # retention_analysis 按参考图类型分化（官方口径：逐图声明"管什么、不管什么"，
@@ -327,9 +328,12 @@ def compile_h3_prompt(
     # ---- subject_definitions ----
     subj: list[str] = []
     if relay:
-        subj.append(RELAY_ANCHOR_EN)
         if storyboard_reference:
+            # 宫格分镜板参考：官方 R2V 口径不叠加单帧锚定，
+            # 换成"首格定开场、宫格布局不上画"的宫格口径
             subj.append(STORYBOARD_ANCHOR_EN)
+        else:
+            subj.append(RELAY_ANCHOR_EN)
     for pic_no, _, asset in pictures:
         if pic_no == 1 and relay:
             continue
@@ -381,11 +385,19 @@ def compile_h3_prompt(
     # ---- retention_analysis ----
     ret: list[str] = []
     if relay:
-        ret.append(
-            "<Picture 1> (appears in [Shot 1]): fully_preserved - opening "
-            "composition, character placement and lighting exactly as supplied; "
-            "the action starts from this frame."
-        )
+        if storyboard_reference:
+            ret.append(
+                "<Picture 1> (appears in [Shot 1]): fully_preserved - frame 0 "
+                "opens on the first cell of <Picture 1>, the shot order "
+                "follows the remaining cells, and the grid layout itself "
+                "never appears on screen."
+            )
+        else:
+            ret.append(
+                "<Picture 1> (appears in [Shot 1]): fully_preserved - opening "
+                "composition, character placement and lighting exactly as supplied; "
+                "the action starts from this frame."
+            )
     for pic_no, _, asset in pictures:
         if pic_no == 1 and relay:
             continue

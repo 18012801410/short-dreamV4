@@ -739,12 +739,23 @@ def _storyboard_segment() -> "Segment":
 
 
 def test_h3_storyboard_sentence_injected() -> None:
-    """storyboard_reference=True 时 subject_definitions 注入宫格声明+防入画护栏。"""
+    """storyboard_reference=True 时注入宫格声明：首格定开场+防入画护栏。"""
     from server.app.h3_compiler import compile_h3_prompt
 
     prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True, storyboard_reference=True)
     assert "storyboard reference" in prompt
     assert "never appears on screen" in prompt
+    # 宫格口径由 STORYBOARD_ANCHOR_EN 承担开场帧语义（不再叠加 RELAY 单帧锚定）
+    assert "frame 0 must match the first cell" in prompt
+
+
+def test_h3_storyboard_excludes_relay_anchor() -> None:
+    """互斥：宫格分镜板参考不注入 RELAY_ANCHOR_EN 的单帧锚定句。"""
+    from server.app.h3_compiler import compile_h3_prompt
+
+    prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True, storyboard_reference=True)
+    assert "exact opening frame" not in prompt
+    assert "the action starts from this frame" not in prompt
 
 
 def test_h3_no_storyboard_sentence_by_default() -> None:
@@ -1276,3 +1287,6 @@ def test_relay_segment_grid_yields_to_tail_frame(tmp_path) -> None:
     assert relay["opening_frame_source"] == "tail_frame"
     assert relay["continuity_prev_segment_key"] == "S01G01"
     assert relay["reference_paths"] == [f"{pid}/assets/a-lead.png"]
+    # 宫格声明互斥：接力段绝不注入宫格声明；首段宫格声明已注入
+    assert "storyboard reference" not in relay["prompt"]
+    assert "storyboard reference" in head["prompt"]
