@@ -1,0 +1,202 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "MiniMax H3 UNET"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "CLIP (minimax / Qwen3-VL)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Video VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Audio VAE"
+    }
+  },
+  "8": {
+    "inputs": {
+      "preview": "",
+      "source": [
+        "28",
+        5
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Director 运行报告"
+    }
+  },
+  "16": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3MemoryEfficientSageAttentionPatch",
+    "_meta": {
+      "title": "MiniMax H3 Memory Efficient Sage Attention Patch"
+    }
+  },
+  "18": {
+    "inputs": {
+      "mode": "upscale",
+      "upscale_method": "lanczos",
+      "latent_upscale_model": 0.25,
+      "sampler": "euler",
+      "passes": 1,
+      "seed_mode": "inherit",
+      "aspect_ratio": "3:4 (竖版标准)",
+      "megapixels": 1,
+      "width": 896,
+      "height": 1184,
+      "skip_fl2v": true,
+      "confirm_first_pass": false,
+      "upscale_model": [
+        "19",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3DirectorRefine",
+    "_meta": {
+      "title": "MiniMax H3 Director Refine"
+    }
+  },
+  "19": {
+    "inputs": {
+      "model_name": "4x-UltraSharp.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Load Upscale Model"
+    }
+  },
+  "22": {
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "MiniMax H3 UNET"
+    }
+  },
+  "27": {
+    "inputs": {
+      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "28": {
+    "inputs": {
+      "task_type": "r2v — 参考主体生视频(Reference to Video)",
+      "global_prompt": "<Picture 1> ：身份为女子A，锁定面部特征、黑色低马尾、香槟色缎面吊带长裙、银色心形项链。\n<Picture 2> ：身份为女子B，锁定面部特征、黑色披肩中长发、黄色碎花吊带长裙。\n场景设定：<Picture 3> ，湖畔公园，中式古建凉亭，青石板路，绿树成荫，晴朗明亮自然光。",
+      "bd_grp_sample": "采样设置",
+      "cfg": 1,
+      "seed": 584087472916009,
+      "frame_rate": 24,
+      "width": 864,
+      "height": 480,
+      "ref_max_size": 864,
+      "total_frames": 508,
+      "timeline_data": "{\"version\":5,\"editMode\":\"segment\",\"totalFrames\":508,\"frameRate\":24,\"video\":{\"fileName\":\"\",\"videoFile\":\"\",\"subfolder\":\"\",\"type\":\"input\",\"frames\":[],\"frameMap\":[],\"sourceFrameCount\":508,\"deletedSourceRanges\":[]},\"videoClips\":[],\"global\":{\"taskType\":\"r2v — 参考主体生视频(Reference to Video)\",\"prompt\":\"<Picture 1> ：身份为女子A，锁定面部特征、黑色低马尾、香槟色缎面吊带长裙、银色心形项链。\\n<Picture 2> ：身份为女子B，锁定面部特征、黑色披肩中长发、黄色碎花吊带长裙。\\n场景设定：<Picture 3> ，湖畔公园，中式古建凉亭，青石板路，绿树成荫，晴朗明亮自然光。\",\"refs\":[{\"index\":0,\"imageFile\":\"d918f0e9e8488308fa65ee04aec68d559762c5743ae53fb7760a8ebce974ed0e.jpg\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"imageFile\":\"58d6dc1f1d193145500d835b62b3a254ca13d1a6eff0f8cad6deeaaa2f8c2d2c.jpg\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"imageFile\":\"27c349c3169c4b571361593f49c0e99deeb236fdae4c8fb37c39fe2840617d3a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"commonEnabled\":true,\"commonCollapsed\":true,\"refVideos\":[],\"genImage\":{\"imageFile\":\"\"}},\"output\":{\"mode\":\"fixed\",\"aspectRatio\":\"16:9 (宽屏)\",\"megapixels\":0.4,\"multiple\":32,\"longEdge\":864,\"width\":864,\"height\":480,\"maxExportFrames\":0,\"exportMode\":\"all\",\"audioMode\":\"generate\",\"exportSourceImages\":false,\"refImageSize\":\"match\",\"continuityEnabled\":true,\"continuityOverlapFrames\":22},\"runSelectEnabled\":false,\"runSelection\":[],\"liveTaePreview\":true,\"segments\":[{\"id\":\"mt2mpl6w9lg1u\",\"start\":0,\"length\":175,\"frameCount\":175,\"durationSec\":7,\"prompt\":\"【核心创意】\\n7秒，16:9 横版，清新自然风。一镜到底，女子A与B在公园青石板路上并排跑步，A转头与B交谈。\\n\\n【画面过程描述】\\nShot 1（0-7s）— 跑步与A开口交谈\\n- 景别：中景\\n- 场景：湖畔公园青石板路，背景为中式凉亭\\n- 主体：女子A（<Picture 1> ）与女子B（<Picture 2> ）\\n- 运镜：正面跟随退拍（Dolly back），保持两人在画面中央\\n- 动作：两人保持慢跑，裙摆随风微动。女子A微喘气，转头看向B。\\n- 台词：A说：\\\"今天跑这一段感觉好舒服啊！\\\"\\n- 音效：平稳的跑步脚步声、轻微呼吸声、自然鸟鸣\\n- 转场：保持运动，无切镜\\n\\n【不想要】\\n- 角色服装与原图不符\\n- 画面抖动过大\\n- 非叙事性音乐：N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":false,\"refImageSize\":\"match\"},{\"id\":\"mt2wmv4sr98g6\",\"start\":175,\"length\":175,\"frameCount\":175,\"durationSec\":7,\"prompt\":\"【核心创意】\\n7秒，16:9 横版。一镜到底延续前段，B笑着回应，A提议加速。\\n\\n【画面过程描述】\\nShot 1（0-7s）— B的回应与A的提议\\n- 景别：中景\\n- 场景：公园小径，阳光穿透树叶形成光斑\\n- 主体：女子A与女子B\\n- 运镜：继续正面跟随退拍（Dolly back）\\n- 动作：女子B边跑边笑，看向A；随后A表情兴奋，提出新建议。\\n- 台词：B说：\\\"是啊，风很凉快！\\\" / A说：\\\"要不要稍微加快一点？\\\"\\n- 音效：脚步声延续、衣物摩擦声\\n- 转场：保持运动，无切镜\\n\\n【不想要】\\n- 动作断档或穿模\\n- 非叙事性音乐：N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"},{\"id\":\"mt2wnr7mqria8\",\"start\":350,\"length\":158,\"frameCount\":158,\"durationSec\":6,\"prompt\":\"【核心创意】\\n6秒，16:9 横版。一镜到底结尾，两人达成一致，加速奔跑并相视一笑。\\n\\n【画面过程描述】\\nShot 1（0-6s）— 加速与相视一笑\\n- 景别：中景\\n- 场景：公园小径，背景湖面波光粼粼\\n- 主体：女子A与女子B\\n- 运镜：跟随退拍（Dolly back），速度随人物加速而轻微加快\\n- 动作：女子B点头同意，两人步伐同时加快，轻微喘气，随后默契地相视一笑。\\n- 台词：B说：\\\"好呀，我们往前跑跑看！\\\"\\n- 音效：加快的脚步声、明显的喘气声与笑声\\n- 转场：自然淡出\\n\\n【不想要】\\n- 笑容僵硬不自然\\n- 背景环境突变\\n- 非叙事性音乐：N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"}],\"timelineMode\":\"prompt_batch\",\"width\":864,\"height\":480,\"refMaxSize\":864,\"gen\":{\"defaultFrameCount\":124},\"batchDetailMode\":\"solo\",\"batchWorkspaces\":{\"t2v\":{\"selectedIndex\":2,\"editMode\":\"segment\",\"runSelectEnabled\":true,\"runSelection\":[0,1,2],\"segments\":[{\"id\":\"mt2r0df0bsemq\",\"start\":0,\"length\":175,\"frameCount\":175,\"durationSec\":7,\"prompt\":\"【核心创意】\\n7秒，16:9 横版，自然纪录片级写实风格。一只毛茸茸的白色小兔子在翠绿草地上低头吃草，镜头采用低角度跟随拍摄，展现兔子咀嚼的细腻动态与草地质感。自然光照明，色调清新明亮。\\n\\n【画面过程描述】\\nShot 1（0-7s）— 草地进食与跟随观察\\n景别：中近景\\n场景：阳光充沛的开阔草地，草叶随风轻摇，背景有柔和虚化的绿色植被\\n主体：白色垂耳兔，毛发蓬松洁净，三瓣嘴快速蠕动咀嚼青草\\n运镜：低角度平稳跟随镜头（Dolly forward + Tracking），机位高度与兔眼平齐，保持主体居中\\n动作：兔子双耳自然下垂，前爪轻按地面，专注啃食脚下嫩草，偶尔抬头警觉环顾后继续进食\\n音效：清脆的草叶断裂声、细微咀嚼声、远处鸟鸣与微风拂过草地的沙沙声\\n转场：保持运动中，无切镜（为下一段跳跃动作预留动势）\\n\\n【不想要】\\n兔子肢体扭曲或多余腿部\\n草地塑料感或颜色过饱和\\n镜头剧烈抖动或失焦\\n非叙事性音乐：N/A\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":175,\"previewFps\":24},{\"id\":\"mt2w82v94hu0v\",\"start\":175,\"length\":175,\"frameCount\":175,\"durationSec\":7,\"prompt\":\"【核心创意】\\n7秒，16:9 横版，自然纪录片级写实风格。兔子向前轻盈蹦跳数步后停在新植物前，镜头从跟随平滑过渡为环绕运镜，展现兔子转向与探索新食物的灵动姿态。光影随环绕产生自然流动感。\\n\\n【画面过程描述】\\nShot 1（0-3s）— 蹦跳位移（跨段连续动作后半段）\\n景别：中景\\n场景：同前草地，前方出现一簇叶片宽大的深绿色植物\\n主体：白色垂耳兔\\n运镜：跟随镜头减速并准备切换（Tracking → Orbit transition）\\n动作：承接前段动势，兔子后腿发力向前连续蹦跳3-4步，落地轻盈无声，最终停在目标植物旁\\n音效：轻柔的落地噗声、草叶被拨开的窸窣声\\n转场：运镜无缝转换，无硬切\\n\\nShot 2（3-7s）— 环绕观察与新植物互动\\n景别：中近景\\n场景：深绿阔叶植物特写，阳光透过叶片形成斑驳光点\\n主体：白色垂耳兔侧身面向植物\\n运镜：顺时针环绕运镜（Truck left + Pan right），以兔子为中心旋转约90度\\n动作：兔子鼻尖轻触叶片嗅闻，随后张嘴咬住一片叶子开始咀嚼，耳朵随环绕产生的光影变化微微转动\\n音效：叶片被咬下的清脆声、环绕过程中环境音的空间方位变化\\n【不想要】\\n跳跃动作僵硬或悬浮感\\n环绕运镜速度不均或轴心偏移\\n植物形态突变或与片段1场景割裂\\n非叙事性音乐：N/A\\n\\n转场：保持环绕动势，无切镜\\n\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"previewFps\":24,\"_videoFrameCount\":175},{\"id\":\"mt2w9ehr7krty\",\"start\":350,\"length\":158,\"frameCount\":158,\"durationSec\":6,\"prompt\":\"【核心创意】\\n6秒，16:9 横版，自然纪录片级写实风格。完成环绕运镜的最后阶段，兔子吃完叶子后活力十足地向前方蹦跳远去，镜头从环绕自然转为后方跟随目送，营造意犹未尽的自然生机感。\\n\\n【画面过程描述】\\nShot 1（0-3s）— 环绕收尾与进食完毕（跨段连续动作后半段）\\n景别：中景\\n场景：同前草地，光线因环绕角度变化呈现侧逆光轮廓\\n主体：白色垂耳兔\\n运镜：继续顺时针环绕（Truck left + Pan right）至正后方视角\\n动作：承接前段环绕动势，兔子咽下最后一口叶子，满足地轻晃脑袋，双耳向后贴伏准备起跳\\n音效：吞咽声、耳朵摩擦声、环境风声渐强\\n转场：运镜无缝转换为后方跟随，无硬切\\n\\nShot 2（3-6s）— 向前蹦去与目送收尾\\n景别：中全景\\n场景：草地延伸至远方，阳光洒满画面\\n主体：白色垂耳兔背影\\n运镜：后方平稳跟随镜头（Dolly forward + Tracking），逐渐拉远\\n动作：兔子后腿蹬地有力向前连续蹦跳，尾巴随跳跃节奏上下摆动，越跳越远直至画面边缘\\n音效：渐远的落地声、风吹草浪声、鸟鸣渐弱\\n转场：自然淡出收尾\\n\\n【不想要】\\n环绕结束瞬间画面跳变\\n蹦跳方向与镜头运动矛盾\\n兔子比例失调或消失过快\\n非叙事性音乐：N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"previewFps\":24,\"_videoFrameCount\":158}],\"globalCommon\":{\"commonEnabled\":false,\"commonCollapsed\":false,\"prompt\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[]}},\"r2v\":{\"selectedIndex\":0,\"editMode\":\"segment\",\"runSelectEnabled\":false,\"runSelection\":[],\"segments\":[{\"id\":\"mt2mpl6w9lg1u\",\"start\":0,\"length\":175,\"frameCount\":175,\"durationSec\":7,\"prompt\":\"【核心创意】\\n7秒，16:9 横版，清新自然风。一镜到底，女子A与B在公园青石板路上并排跑步，A转头与B交谈。\\n\\n【画面过程描述】\\nShot 1（0-7s）— 跑步与A开口交谈\\n- 景别：中景\\n- 场景：湖畔公园青石板路，背景为中式凉亭\\n- 主体：女子A（<Picture 1> ）与女子B（<Picture 2> ）\\n- 运镜：正面跟随退拍（Dolly back），保持两人在画面中央\\n- 动作：两人保持慢跑，裙摆随风微动。女子A微喘气，转头看向B。\\n- 台词：A说：\\\"今天跑这一段感觉好舒服啊！\\\"\\n- 音效：平稳的跑步脚步声、轻微呼吸声、自然鸟鸣\\n- 转场：保持运动，无切镜\\n\\n【不想要】\\n- 角色服装与原图不符\\n- 画面抖动过大\\n- 非叙事性音乐：N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":false,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":175,\"previewFps\":24},{\"id\":\"mt2wmv4sr98g6\",\"start\":175,\"length\":175,\"frameCount\":175,\"durationSec\":7,\"prompt\":\"【核心创意】\\n7秒，16:9 横版。一镜到底延续前段，B笑着回应，A提议加速。\\n\\n【画面过程描述】\\nShot 1（0-7s）— B的回应与A的提议\\n- 景别：中景\\n- 场景：公园小径，阳光穿透树叶形成光斑\\n- 主体：女子A与女子B\\n- 运镜：继续正面跟随退拍（Dolly back）\\n- 动作：女子B边跑边笑，看向A；随后A表情兴奋，提出新建议。\\n- 台词：B说：\\\"是啊，风很凉快！\\\" / A说：\\\"要不要稍微加快一点？\\\"\\n- 音效：脚步声延续、衣物摩擦声\\n- 转场：保持运动，无切镜\\n\\n【不想要】\\n- 动作断档或穿模\\n- 非叙事性音乐：N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":175,\"previewFps\":24},{\"id\":\"mt2wnr7mqria8\",\"start\":350,\"length\":158,\"frameCount\":158,\"durationSec\":6,\"prompt\":\"【核心创意】\\n6秒，16:9 横版。一镜到底结尾，两人达成一致，加速奔跑并相视一笑。\\n\\n【画面过程描述】\\nShot 1（0-6s）— 加速与相视一笑\\n- 景别：中景\\n- 场景：公园小径，背景湖面波光粼粼\\n- 主体：女子A与女子B\\n- 运镜：跟随退拍（Dolly back），速度随人物加速而轻微加快\\n- 动作：女子B点头同意，两人步伐同时加快，轻微喘气，随后默契地相视一笑。\\n- 台词：B说：\\\"好呀，我们往前跑跑看！\\\"\\n- 音效：加快的脚步声、明显的喘气声与笑声\\n- 转场：自然淡出\\n\\n【不想要】\\n- 笑容僵硬不自然\\n- 背景环境突变\\n- 非叙事性音乐：N/A\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":158,\"previewFps\":24}],\"globalCommon\":{\"commonEnabled\":true,\"commonCollapsed\":true,\"prompt\":\"<Picture 1> ：身份为女子A，锁定面部特征、黑色低马尾、香槟色缎面吊带长裙、银色心形项链。\\n<Picture 2> ：身份为女子B，锁定面部特征、黑色披肩中长发、黄色碎花吊带长裙。\\n场景设定：<Picture 3> ，湖畔公园，中式古建凉亭，青石板路，绿树成荫，晴朗明亮自然光。\",\"refs\":[{\"index\":0,\"imageFile\":\"d918f0e9e8488308fa65ee04aec68d559762c5743ae53fb7760a8ebce974ed0e.jpg\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"imageFile\":\"58d6dc1f1d193145500d835b62b3a254ca13d1a6eff0f8cad6deeaaa2f8c2d2c.jpg\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"imageFile\":\"27c349c3169c4b571361593f49c0e99deeb236fdae4c8fb37c39fe2840617d3a.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[]}},\"i2v\":{\"selectedIndex\":0,\"editMode\":\"segment\",\"runSelectEnabled\":false,\"runSelection\":[],\"segments\":[{\"id\":\"mt2q100cf2aos\",\"start\":0,\"length\":124,\"frameCount\":124,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"previewFps\":24,\"_videoFrameCount\":124}],\"globalCommon\":{\"commonEnabled\":false,\"commonCollapsed\":false,\"prompt\":\"\",\"refs\":[],\"refAudios\":[],\"refVideos\":[]}}},\"shots\":[{\"id\":\"mt1gbi11o9g6y\",\"durationSec\":5,\"prompt\":\"一个女人在路边走，看见旁边有一只狗\",\"negativePrompt\":\"bad video\",\"startImage\":null,\"endImage\":null}],\"keyframes\":[{\"id\":\"mt1gbi11o9g6y\",\"imageFile\":\"\",\"width\":0,\"height\":0,\"start\":0,\"length\":124,\"frameCount\":124,\"durationSec\":5,\"prompt\":\"一个女人在路边走，看见旁边有一只狗\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false}],\"durationSec\":5}",
+      "bd_grp_advanced": "高级采样",
+      "steps": 8,
+      "sampler": "euler",
+      "scheduler": "beta",
+      "shift_video": 12,
+      "shift_audio": 3,
+      "export_source_images": false,
+      "bd_grp_perf": true,
+      "clear_vram_between_segments": "",
+      "minimax_director_ui": "",
+      "model": [
+        "27",
+        0
+      ],
+      "video_vae": [
+        "3",
+        0
+      ],
+      "audio_vae": [
+        "4",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
+      "refine": [
+        "18",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3Director",
+    "_meta": {
+      "title": "MiniMaxH3Director"
+    }
+  },
+  "29": {
+    "inputs": {
+      "frame_rate": [
+        "28",
+        2
+      ],
+      "loop_count": 0,
+      "filename_prefix": "AnimateDiff",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "no_preview": false,
+      "images": [
+        "28",
+        0
+      ],
+      "audio": [
+        "28",
+        1
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  }
+}

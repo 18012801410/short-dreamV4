@@ -1,0 +1,312 @@
+{
+  "33": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "scheduler": "beta",
+      "denoise": 0.2,
+      "model": [
+        "31",
+        0
+      ],
+      "steps": 3
+    },
+    "_meta": {
+      "title": "BasicScheduler"
+    }
+  },
+  "12": {
+    "class_type": "MiniMaxH3Director",
+    "inputs": {
+      "shift_audio": 3,
+      "seed": 666,
+      "shift_video": 12,
+      "export_source_images": false,
+      "minimax_director_ui": "",
+      "bd_grp_sample": "采样设置",
+      "audio_vae": [
+        "4",
+        0
+      ],
+      "total_frames": 367,
+      "scheduler": "simple",
+      "clear_vram_between_segments": true,
+      "bd_grp_advanced": "高级采样",
+      "model": [
+        "15",
+        0
+      ],
+      "height": 480,
+      "cfg": 1,
+      "global_prompt": "subject_definitions:\n<Subject 1> 是来自  的棕发紫眸女性，身份与穿着完全锁定参考图：深海军蓝无袖高开衩丝质礼服、金线刺绣立领、黑色薄丝袜、金色尖头高跟鞋、金色耳饰与手镯。\n<Subject 2> 是来自  的可爱立体卡通小猴，浅棕皮毛、米色肚腹、橙色眼罩护目镜、蓝色大眼与细长尾巴，外形完全锁定参考图。\n<Subject 3> 是来自  的金发蓝眸女性，白色挂脖晚礼服、胸前红宝石坠饰、黑色薄丝袜、白色高跟鞋与金色手镯，身份与穿着完全锁定参考图。",
+      "timeline_data": "{\"version\":5,\"editMode\":\"segment\",\"totalFrames\":367,\"frameRate\":24,\"video\":{\"fileName\":\"\",\"videoFile\":\"\",\"subfolder\":\"\",\"type\":\"input\",\"frames\":[],\"frameMap\":[],\"sourceFrameCount\":734,\"deletedSourceRanges\":[]},\"videoClips\":[],\"global\":{\"taskType\":\"r2v — 参考主体生视频(Reference to Video)\",\"prompt\":\"subject_definitions:\\n<Subject 1> 是来自  的棕发紫眸女性，身份与穿着完全锁定参考图：深海军蓝无袖高开衩丝质礼服、金线刺绣立领、黑色薄丝袜、金色尖头高跟鞋、金色耳饰与手镯。\\n<Subject 2> 是来自  的可爱立体卡通小猴，浅棕皮毛、米色肚腹、橙色眼罩护目镜、蓝色大眼与细长尾巴，外形完全锁定参考图。\\n<Subject 3> 是来自  的金发蓝眸女性，白色挂脖晚礼服、胸前红宝石坠饰、黑色薄丝袜、白色高跟鞋与金色手镯，身份与穿着完全锁定参考图。\",\"refs\":[{\"index\":0,\"imageFile\":\"krea2_identity_edit_00057_.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"imageFile\":\"krea2_identity_edit_00028_.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"imageFile\":\"krea2_identity_edit_00058_.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"continuousReference\":false,\"genImage\":{\"imageFile\":\"\"},\"sourceWidth\":768,\"sourceHeight\":1024,\"refAudios\":[],\"commonEnabled\":false,\"commonCollapsed\":true,\"refVideos\":[]},\"output\":{\"mode\":\"fixed\",\"aspectRatio\":\"16:9 (宽屏)\",\"megapixels\":0.4,\"multiple\":32,\"longEdge\":864,\"width\":864,\"height\":480,\"maxExportFrames\":0,\"exportMode\":\"all\",\"audioMode\":\"source\",\"exportSourceImages\":false,\"refImageSize\":\"match\",\"continuityEnabled\":false,\"continuityOverlapFrames\":22},\"runSelectEnabled\":true,\"runSelection\":[1],\"segments\":[{\"id\":\"msyi2qhz5lupx\",\"start\":0,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"subject_definitions: <Picture 1> is the opening composition of this shot, showing Lu Zheng standing beside his folding e-bike on a neon-lit night street, looking down at his phone. <Subject 1> is Lu Zheng, the lean young Chinese ride-hailing driver in <Picture 2>, with short neat black hair and a dark ride-hailing vest uniform over a light t-shirt. <Subject 2> is the neon night market street in <Picture 3>, with red and blue neon light casting alternating color blocks across the wet asphalt. <Subject 3> is the black foldable e-bike in <Picture 4>, with a smartphone mounted on the handlebar and a helmet hanging from the grip.\\n\\nsummary: [reference generation] Lu Zheng receives a new ride-hailing order on his phone while standing beside his e-bike on a neon-lit night street, then accepts it.\\n\\nretention_analysis: <Picture 1> (appears in [Shot 1]): fully_preserved - the medium framing, subject placement and downward gaze start exactly as supplied. <Subject 1> (appears in [Shot 1]): fully_preserved - face shape, short neat black hair and dark ride-hailing vest uniform stay identical; his action of looking at the phone comes from this shot. <Subject 2> (appears in [Shot 1]): partially_preserved - street layout and neon color blocks are kept; ambient night details follow this shot. <Subject 3> (appears in [Shot 1]): fully_preserved - e-bike form, foldable frame and handlebar phone mount stay identical.\\n\\ndetailed_description: The target video uses a cinematic, live-action style with cool night lighting and a shallow depth of field. [Shot 1] The shot begins from <Picture 1>, with <Subject 1> standing beside <Subject 3> on <Subject 2>, his head bowed slightly as he looks down at the glowing phone screen in his hand. The phone screen suddenly lights up with a new order notification, casting a soft white glow on his face. He lifts his gaze from the screen, eyes sharpening with recognition, then raises his thumb and taps the screen to accept the order. A brief confirmation animation plays on the screen. His expression relaxes into quiet satisfaction as he pockets the phone and reaches for the helmet hanging from the handlebar. The red and blue neon light continues to sweep across his face and the wet asphalt throughout.\\n\\noverall_soundscape: Distant night market chatter and occasional scooter engines, soft electronic notification chime from the phone, faint hum of neon signs.\\n\\nnon_diegetic_music: Sparse ambient synth pad with a slow pulse, building subtly as the order arrives, then settling into a low, expectant tone.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[{\"index\":0,\"imageFile\":\"1c5fda9d51c2a1af4bf044837f5877523a00dfdfa40fecddbe52d5b6e6eca370.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"imageFile\":\"5790e0a43eafd38feac9cbf7defe6ee216d88ff4125fe574a8496fbfabb0454c.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"imageFile\":\"4c1c4a833a5c34a08c6e84a047a661bbbd2f932c5a06a83ad0843919fc10b13c.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"imageFile\":\"71c856c9dfa9b036314c7ad1063077dfa21378137abebd8f5854163c946abfe5.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":false,\"refImageSize\":\"match\"},{\"id\":\"mtoqb6wacikra\",\"start\":243,\"length\":124,\"frameCount\":124,\"durationSec\":5,\"prompt\":\"subject_definitions: <Picture 1> is the opening composition of this shot, showing a black sedan parked at the roadside with a man in a dark trench coat standing beside the open rear door. <Subject 1> is Lu Zheng, the lean young Chinese ride-hailing driver in <Picture 2>, with short neat black hair and a dark ride-hailing vest uniform, approaching on a folding e-bike in the foreground edge. <Subject 2> is the neon night market street in <Picture 2>, with red and blue neon light illuminating the scene. <Subject 3> is the irregular hexagonal metal pendant in <Picture 3>, with sharp uneven edges and engraved symbols, held in the man's hand. <Subject 4> is the black foldable e-bike in <Picture 4>, ridden by Lu Zheng at the foreground edge.\\n\\nsummary: [keyframe completion + reference generation] A mysterious man in a dark trench coat checks the street behind him, tucks a metal pendant into his coat pocket, and gets into the rear seat of a black sedan on a neon-lit night street.\\n\\nretention_analysis: <Picture 1> (appears in [Shot 1]): fully_preserved - the opening framing, sedan position and man's stance start exactly as supplied. <Subject 1> (appears in [Shot 1]): partially_preserved - face and uniform stay identical; his approach on the e-bike follows this shot. <Subject 2> (appears in [Shot 1]): partially_preserved - street layout and neon positions are kept; light flicker follows this shot. <Subject 3> (appears in [Shot 1]): fully_preserved - pendant shape, sharp edges and engraved symbols stay identical as it catches the light. <Subject 4> (appears in [Shot 1]): partially_preserved - e-bike form stays identical; its movement comes from this shot.\\n\\ndetailed_description: The target video uses a cinematic, live-action style with cool night lighting and shallow depth of field. [Shot 1] The shot begins from <Picture 1>, with the man in the dark trench coat standing beside the open rear door of the black sedan on the neon night market street (<Subject 2>), his head turned as he glances back toward the end of the street with a wary expression. In his hand, the irregular hexagonal metal pendant (<Subject 3>) catches a glint of streetlight. He scans the empty street behind him, then quickly tucks the pendant into his coat pocket. He ducks down and climbs into the rear seat of the sedan, pulling the door shut behind him. In the foreground edge, Lu Zheng (<Subject 1>) continues approaching on the folding e-bike (<Subject 4>), unaware. The camera holds in a medium close shot from behind Lu Zheng's position, keeping the sedan and the man's actions in clear view as the door closes with a solid thunk.\\n\\noverall_soundscape: Distant night market ambience, the soft click of the pendant being pocketed, the creak of the sedan door opening, and the solid thunk of the door closing.\\n\\nnon_diegetic_music: A low, suspenseful drone with sparse piano notes, creating an uneasy atmosphere that fades as the door closes.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[{\"index\":0,\"imageFile\":\"37c8e270df1861b7513c755c88095d7391439e3abf678cb478ddb0db6ef0c0ad.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"imageFile\":\"5790e0a43eafd38feac9cbf7defe6ee216d88ff4125fe574a8496fbfabb0454c.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"imageFile\":\"4c1c4a833a5c34a08c6e84a047a661bbbd2f932c5a06a83ad0843919fc10b13c.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"imageFile\":\"c597dae1dd8edc90120e908a820999d29f1e9633ddee915243a050b0c117a704.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":4,\"imageFile\":\"71c856c9dfa9b036314c7ad1063077dfa21378137abebd8f5854163c946abfe5.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":true,\"refImageSize\":\"match\"}],\"timelineMode\":\"prompt_batch\",\"width\":864,\"height\":480,\"refMaxSize\":864,\"gen\":{\"defaultFrameCount\":124},\"keyframes\":[{\"id\":\"msdtx3zi62ktv_s\",\"imageFile\":\"0059.png\",\"width\":768,\"height\":1024,\"start\":0,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"一个猴子在极速奔跑，跑的过程中裤子掉在地上，但他仍然继续奔跑。过程中伴随自然的跑步声\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false},{\"id\":\"msdtx3zi62ktv_e\",\"imageFile\":\"0060.png\",\"width\":512,\"height\":682,\"start\":62,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"isStartFrame\":false,\"isEndFrame\":true},{\"id\":\"msdtx87njf33g_s\",\"imageFile\":\"0060.png\",\"width\":512,\"height\":682,\"start\":124,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"猴子在快速奔跑，双臂自然摆动，跑到一个岩石旁，慢慢的坐下，随着时间的流逝，沙尘慢慢消失，漏出蓝天背景。过程中伴随自然的跑步、坐下时候产生的声音\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false},{\"id\":\"msdtx87njf33g_e\",\"imageFile\":\"0062.png\",\"width\":768,\"height\":1024,\"start\":186,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"isStartFrame\":false,\"isEndFrame\":true},{\"id\":\"msdtwxyuscavj_s\",\"imageFile\":\"0062.png\",\"width\":768,\"height\":1024,\"start\":248,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"猴子从岩石上起身，起身后穿上衣服，背上书包，去教室上课，慢慢走到教室里，过程中伴随穿衣、背书包、走路的背景音\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false},{\"id\":\"msdtwxyuscavj_e\",\"imageFile\":\"0086.png\",\"width\":768,\"height\":1024,\"start\":310,\"length\":62,\"frameCount\":62,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"isStartFrame\":false,\"isEndFrame\":true},{\"id\":\"msdx1e2eigp2x\",\"imageFile\":\"\",\"width\":0,\"height\":0,\"start\":372,\"length\":124,\"frameCount\":124,\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"isStartFrame\":true,\"isEndFrame\":false}],\"durationSec\":20,\"shots\":[{\"id\":\"msdtx3zi62ktv\",\"durationSec\":5,\"prompt\":\"一个猴子在极速奔跑，跑的过程中裤子掉在地上，但他仍然继续奔跑。过程中伴随自然的跑步声\",\"negativePrompt\":\"bad video\",\"startImage\":{\"imageFile\":\"0059.png\",\"width\":768,\"height\":1024},\"endImage\":{\"imageFile\":\"0060.png\",\"width\":512,\"height\":682}},{\"id\":\"msdtx87njf33g\",\"durationSec\":5,\"prompt\":\"猴子在快速奔跑，双臂自然摆动，跑到一个岩石旁，慢慢的坐下，随着时间的流逝，沙尘慢慢消失，漏出蓝天背景。过程中伴随自然的跑步、坐下时候产生的声音\",\"negativePrompt\":\"bad video\",\"startImage\":{\"imageFile\":\"0060.png\",\"width\":512,\"height\":682},\"endImage\":{\"imageFile\":\"0062.png\",\"width\":768,\"height\":1024}},{\"id\":\"msdtwxyuscavj\",\"durationSec\":5,\"prompt\":\"猴子从岩石上起身，起身后穿上衣服，背上书包，去教室上课，慢慢走到教室里，过程中伴随穿衣、背书包、走路的背景音\",\"negativePrompt\":\"bad video\",\"startImage\":{\"imageFile\":\"0062.png\",\"width\":768,\"height\":1024},\"endImage\":{\"imageFile\":\"0086.png\",\"width\":768,\"height\":1024}},{\"id\":\"msdx1e2eigp2x\",\"durationSec\":5,\"prompt\":\"\",\"negativePrompt\":\"bad video\",\"startImage\":null,\"endImage\":null}],\"liveTaePreview\":true,\"batchDetailMode\":\"all\",\"batchWorkspaces\":{\"r2v\":{\"selectedIndex\":1,\"editMode\":\"segment\",\"runSelectEnabled\":true,\"runSelection\":[1],\"segments\":[{\"id\":\"msyi2qhz5lupx\",\"start\":0,\"length\":243,\"frameCount\":243,\"durationSec\":10,\"prompt\":\"subject_definitions: <Picture 1> is the opening composition of this shot, showing Lu Zheng standing beside his folding e-bike on a neon-lit night street, looking down at his phone. <Subject 1> is Lu Zheng, the lean young Chinese ride-hailing driver in <Picture 2>, with short neat black hair and a dark ride-hailing vest uniform over a light t-shirt. <Subject 2> is the neon night market street in <Picture 3>, with red and blue neon light casting alternating color blocks across the wet asphalt. <Subject 3> is the black foldable e-bike in <Picture 4>, with a smartphone mounted on the handlebar and a helmet hanging from the grip.\\n\\nsummary: [reference generation] Lu Zheng receives a new ride-hailing order on his phone while standing beside his e-bike on a neon-lit night street, then accepts it.\\n\\nretention_analysis: <Picture 1> (appears in [Shot 1]): fully_preserved - the medium framing, subject placement and downward gaze start exactly as supplied. <Subject 1> (appears in [Shot 1]): fully_preserved - face shape, short neat black hair and dark ride-hailing vest uniform stay identical; his action of looking at the phone comes from this shot. <Subject 2> (appears in [Shot 1]): partially_preserved - street layout and neon color blocks are kept; ambient night details follow this shot. <Subject 3> (appears in [Shot 1]): fully_preserved - e-bike form, foldable frame and handlebar phone mount stay identical.\\n\\ndetailed_description: The target video uses a cinematic, live-action style with cool night lighting and a shallow depth of field. [Shot 1] The shot begins from <Picture 1>, with <Subject 1> standing beside <Subject 3> on <Subject 2>, his head bowed slightly as he looks down at the glowing phone screen in his hand. The phone screen suddenly lights up with a new order notification, casting a soft white glow on his face. He lifts his gaze from the screen, eyes sharpening with recognition, then raises his thumb and taps the screen to accept the order. A brief confirmation animation plays on the screen. His expression relaxes into quiet satisfaction as he pockets the phone and reaches for the helmet hanging from the handlebar. The red and blue neon light continues to sweep across his face and the wet asphalt throughout.\\n\\noverall_soundscape: Distant night market chatter and occasional scooter engines, soft electronic notification chime from the phone, faint hum of neon signs.\\n\\nnon_diegetic_music: Sparse ambient synth pad with a slow pulse, building subtly as the order arrives, then settling into a low, expectant tone.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[{\"index\":0,\"imageFile\":\"1c5fda9d51c2a1af4bf044837f5877523a00dfdfa40fecddbe52d5b6e6eca370.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"imageFile\":\"5790e0a43eafd38feac9cbf7defe6ee216d88ff4125fe574a8496fbfabb0454c.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"imageFile\":\"4c1c4a833a5c34a08c6e84a047a661bbbd2f932c5a06a83ad0843919fc10b13c.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"imageFile\":\"71c856c9dfa9b036314c7ad1063077dfa21378137abebd8f5854163c946abfe5.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"continuityFromPrev\":false,\"refImageSize\":\"match\",\"referenceVideo\":{\"videoFile\":\"\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},\"_videoFrameCount\":243,\"previewFps\":24,\"previewLive\":true,\"previewStep\":8,\"previewTotalSteps\":8},{\"id\":\"mtoqb6wacikra\",\"start\":243,\"length\":124,\"frameCount\":124,\"durationSec\":5,\"prompt\":\"subject_definitions: <Picture 1> is the opening composition of this shot, showing a black sedan parked at the roadside with a man in a dark trench coat standing beside the open rear door. <Subject 1> is Lu Zheng, the lean young Chinese ride-hailing driver in <Picture 2>, with short neat black hair and a dark ride-hailing vest uniform, approaching on a folding e-bike in the foreground edge. <Subject 2> is the neon night market street in <Picture 2>, with red and blue neon light illuminating the scene. <Subject 3> is the irregular hexagonal metal pendant in <Picture 3>, with sharp uneven edges and engraved symbols, held in the man's hand. <Subject 4> is the black foldable e-bike in <Picture 4>, ridden by Lu Zheng at the foreground edge.\\n\\nsummary: [keyframe completion + reference generation] A mysterious man in a dark trench coat checks the street behind him, tucks a metal pendant into his coat pocket, and gets into the rear seat of a black sedan on a neon-lit night street.\\n\\nretention_analysis: <Picture 1> (appears in [Shot 1]): fully_preserved - the opening framing, sedan position and man's stance start exactly as supplied. <Subject 1> (appears in [Shot 1]): partially_preserved - face and uniform stay identical; his approach on the e-bike follows this shot. <Subject 2> (appears in [Shot 1]): partially_preserved - street layout and neon positions are kept; light flicker follows this shot. <Subject 3> (appears in [Shot 1]): fully_preserved - pendant shape, sharp edges and engraved symbols stay identical as it catches the light. <Subject 4> (appears in [Shot 1]): partially_preserved - e-bike form stays identical; its movement comes from this shot.\\n\\ndetailed_description: The target video uses a cinematic, live-action style with cool night lighting and shallow depth of field. [Shot 1] The shot begins from <Picture 1>, with the man in the dark trench coat standing beside the open rear door of the black sedan on the neon night market street (<Subject 2>), his head turned as he glances back toward the end of the street with a wary expression. In his hand, the irregular hexagonal metal pendant (<Subject 3>) catches a glint of streetlight. He scans the empty street behind him, then quickly tucks the pendant into his coat pocket. He ducks down and climbs into the rear seat of the sedan, pulling the door shut behind him. In the foreground edge, Lu Zheng (<Subject 1>) continues approaching on the folding e-bike (<Subject 4>), unaware. The camera holds in a medium close shot from behind Lu Zheng's position, keeping the sedan and the man's actions in clear view as the door closes with a solid thunk.\\n\\noverall_soundscape: Distant night market ambience, the soft click of the pendant being pocketed, the creak of the sedan door opening, and the solid thunk of the door closing.\\n\\nnon_diegetic_music: A low, suspenseful drone with sparse piano notes, creating an uneasy atmosphere that fades as the door closes.\",\"negativePrompt\":\"\",\"taskType\":\"\",\"refs\":[{\"index\":0,\"imageFile\":\"37c8e270df1861b7513c755c88095d7391439e3abf678cb478ddb0db6ef0c0ad.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"imageFile\":\"5790e0a43eafd38feac9cbf7defe6ee216d88ff4125fe574a8496fbfabb0454c.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"imageFile\":\"4c1c4a833a5c34a08c6e84a047a661bbbd2f932c5a06a83ad0843919fc10b13c.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":3,\"imageFile\":\"c597dae1dd8edc90120e908a820999d29f1e9633ddee915243a050b0c117a704.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":4,\"imageFile\":\"71c856c9dfa9b036314c7ad1063077dfa21378137abebd8f5854163c946abfe5.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[],\"genImage\":{\"imageFile\":\"\",\"fileName\":\"\"},\"previewFps\":24,\"refImageSize\":\"match\",\"_videoFrameCount\":124}],\"globalCommon\":{\"commonEnabled\":false,\"commonCollapsed\":true,\"prompt\":\"subject_definitions:\\n<Subject 1> 是来自  的棕发紫眸女性，身份与穿着完全锁定参考图：深海军蓝无袖高开衩丝质礼服、金线刺绣立领、黑色薄丝袜、金色尖头高跟鞋、金色耳饰与手镯。\\n<Subject 2> 是来自  的可爱立体卡通小猴，浅棕皮毛、米色肚腹、橙色眼罩护目镜、蓝色大眼与细长尾巴，外形完全锁定参考图。\\n<Subject 3> 是来自  的金发蓝眸女性，白色挂脖晚礼服、胸前红宝石坠饰、黑色薄丝袜、白色高跟鞋与金色手镯，身份与穿着完全锁定参考图。\",\"refs\":[{\"index\":0,\"imageFile\":\"krea2_identity_edit_00057_.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":1,\"imageFile\":\"krea2_identity_edit_00028_.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"},{\"index\":2,\"imageFile\":\"krea2_identity_edit_00058_.png\",\"fileName\":\"\",\"type\":\"input\",\"subfolder\":\"\"}],\"refAudios\":[],\"refVideos\":[]}}}}",
+      "refine": [
+        "38",
+        0
+      ],
+      "frame_rate": 24,
+      "steps": 8,
+      "video_vae": [
+        "3",
+        0
+      ],
+      "sampler": "res_multistep",
+      "bd_grp_perf": true,
+      "width": 864,
+      "ref_max_size": 864,
+      "task_type": "r2v — 参考主体生视频(Reference to Video)",
+      "clip": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "MiniMaxH3Director"
+    }
+  },
+  "23": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "weight_dtype": "default",
+      "unet_name": "minimax_h3_ref2va_pruned_w4a8_mixed.safetensors"
+    },
+    "_meta": {
+      "title": "MiniMax H3 UNET"
+    }
+  },
+  "14": {
+    "class_type": "PathchSageAttentionKJ",
+    "inputs": {
+      "sage_attention": "auto",
+      "model": [
+        "16",
+        0
+      ],
+      "allow_compile": false
+    },
+    "_meta": {
+      "title": "Patch Sage Attention KJ"
+    }
+  },
+  "15": {
+    "class_type": "MiniMaxH3MemoryEfficientSageAttentionPatch",
+    "inputs": {
+      "model": [
+        "14",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "MiniMax H3 Memory Efficient Sage Attention Patch"
+    }
+  },
+  "16": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "38": {
+    "class_type": "MiniMaxH3DirectorRefine",
+    "inputs": {
+      "aspect_ratio": "16:9 (宽屏)",
+      "refine_model": [
+        "31",
+        0
+      ],
+      "megapixels": 2,
+      "latent_upscale_model": "minimax_h3_latent_upscaler_3d_bf16.safetensors",
+      "seed_mode": "inherit",
+      "sampler": "euler",
+      "mode": "upscale",
+      "passes": 1,
+      "width": 1920,
+      "skip_fl2v": true,
+      "confirm_first_pass": false,
+      "sigmas": [
+        "33",
+        0
+      ],
+      "upscale_method": "h3_latent",
+      "height": 1088
+    },
+    "_meta": {
+      "title": "MiniMax H3 Director Refine"
+    }
+  },
+  "19": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "12",
+        6
+      ],
+      "fps": [
+        "12",
+        2
+      ],
+      "audio": [
+        "12",
+        1
+      ],
+      "bit_depth": 10
+    },
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "weight_dtype": "default",
+      "unet_name": "MiniMax-H3-Ref2VA-int8-convrot.safetensors"
+    },
+    "_meta": {
+      "title": "MiniMax H3 UNET"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "CLIP (minimax / Qwen3-VL)"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "Video VAE"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "_meta": {
+      "title": "Audio VAE"
+    }
+  },
+  "6": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "fps": [
+        "12",
+        2
+      ],
+      "audio": [
+        "12",
+        1
+      ],
+      "bit_depth": 8
+    },
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "7": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "codec": "auto",
+      "filename_prefix": "video/MiniMaxH3_Director",
+      "fw_video_preview": "",
+      "format": "auto",
+      "video": [
+        "6",
+        0
+      ],
+      "video-preview": ""
+    },
+    "_meta": {
+      "title": "💾 Save Video"
+    }
+  },
+  "8": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "preview": "MiniMax H3 Director [批量生成 (r2v)] (segment): 2 segment(s), 367 frames @ 24.00 fps\nOutput: 864×480 (fixed)\nGlobal task: 参考主体生视频(Reference to Video)\nRefine: ON (upscale, sigmas euler 3-step, 二采模型, 16:9 (宽屏) → 1920×1088, minimax_h3_latent_upscaler_3d_bf16.safetensors)\n  #1 [0:243] 243f — r2v — subject_definitions: <Picture 1> is the opening composition …\n  #2 [243:367] 124f — r2v — subject_definitions: <Picture 1> is the opening composition …\n\nExecution path: ComfyUI official MiniMax H3\nSample: official MiniMaxH3SigmaShift → BasicScheduler → BasicGuider/CFGGuider → SamplerCustomAdvanced.\nLive preview: ON — 采样 TAE + 成片后整段 JPEG 播放。\nVRAM: 段间清理显存已开启（最后一段不清理）。\nAudio: generate — decode MiniMax H3 AV latent audio.\nRun selection: 1/2 segment(s) (indices [2]; skipped [1])\nSegment continuity: OFF — official MiniMax H3 per-segment path (no motion-context pin/patch/trim; r2v/v2v/rv2v use stock ReferenceToVideo).\nSegment 1/2: loaded from cache (243 frames, +audio)\nSegment 2/2: r2v — Reference-to AV — subject images (+ optional tags) in prompt (MiniMax H3) (~5 ref image(s), 0 ref video(s)) (124 frames, seed=666, refine upscale, custom model, 1920×1088, h3_latent, sigmas wired 3-step)\nSegment 2 timing: cond=14.7s sample=175.4s decode=35.3s cache=0.9s cleanup=skipped\n\nPartial run: re-generated 1 video group(s).\n\nGenerated audio: decoded from MiniMax H3 AV latent (frame-aligned to picture / timeline fps).\n\nimages_pre_refine: first-pass video (before second sample / upscale). Cached or passthrough slots reuse the stored final frames.\n\n有问题联系作者：AI搅拌手  QQ交流群：551482703",
+      "source": [
+        "12",
+        5
+      ]
+    },
+    "_meta": {
+      "title": "Director 运行报告"
+    }
+  },
+  "30": {
+    "class_type": "PathchSageAttentionKJ",
+    "inputs": {
+      "sage_attention": "auto",
+      "model": [
+        "32",
+        0
+      ],
+      "allow_compile": false
+    },
+    "_meta": {
+      "title": "Patch Sage Attention KJ"
+    }
+  },
+  "20": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "codec": "auto",
+      "filename_prefix": "video/MiniMaxH3_Director",
+      "fw_video_preview": "",
+      "format": "auto",
+      "video": [
+        "19",
+        0
+      ],
+      "video-preview": ""
+    },
+    "_meta": {
+      "title": "💾 Save Video"
+    }
+  },
+  "31": {
+    "class_type": "MiniMaxH3MemoryEfficientSageAttentionPatch",
+    "inputs": {
+      "model": [
+        "30",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "MiniMax H3 Memory Efficient Sage Attention Patch"
+    }
+  },
+  "32": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "lora_name": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "23",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  }
+}
