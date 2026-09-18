@@ -53,6 +53,15 @@ RELAY_ANCHOR_EN = (
     "happen after this frame."
 )
 
+# 宫格分镜板声明（<Picture 1>=宫格时注入）：官方 R2V 口径——声明视角/站位/镜序，
+# 并加"宫格本身不上画"护栏（防止 H3 把多格布局当成画面内容渲染成分屏）
+STORYBOARD_ANCHOR_EN = (
+    "<Picture 1> is a storyboard reference for the shots of this segment, "
+    "defining the viewpoint, subject placement, and shot order; the target "
+    "video is a single continuous take, and the grid layout of <Picture 1> "
+    "itself never appears on screen."
+)
+
 # retention_analysis 按参考图类型分化（官方口径：逐图声明"管什么、不管什么"，
 # 避免角色板顺带钉死构图、场景板顺带决定人物长相）
 _RETENTION_BY_KIND = {
@@ -284,12 +293,17 @@ def compile_h3_prompt(
     scene_summary: str = "",
     style_line: str = "",
     opening_frame: bool | None = None,
+    storyboard_reference: bool = False,
 ) -> str:
     """从 Segment 结构化数据编译六段式 reference 提示词（英文正文+中文台词）。
 
     opening_frame：显式声明本段是否带开场帧槽位（<Picture 1>）。缺省跟随
     segment.continuity.enabled；关键帧段（TASK-031）在产视频时用
     opening_frame=True 重编译，让非连续段也拥有 Picture 1 槽位且编号不错位。
+
+    storyboard_reference：<Picture 1> 是多宫格分镜板（方案A）时置 True，
+    在 subject_definitions 注入官方 R2V 宫格声明句（视角/站位/镜序 +
+    "宫格本身不上画"护栏）；普通开场帧不注入。
     """
     relay = segment.continuity.enabled if opening_frame is None else opening_frame
     pictures: list[tuple[int, str, Asset | None]] = []
@@ -314,6 +328,8 @@ def compile_h3_prompt(
     subj: list[str] = []
     if relay:
         subj.append(RELAY_ANCHOR_EN)
+        if storyboard_reference:
+            subj.append(STORYBOARD_ANCHOR_EN)
     for pic_no, _, asset in pictures:
         if pic_no == 1 and relay:
             continue

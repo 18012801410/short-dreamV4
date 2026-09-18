@@ -723,3 +723,33 @@ def test_keyframe_description_override_takes_precedence() -> None:
     assert "a2" in prompt
     assert "整段开场描述" not in prompt
     assert "a1" not in prompt
+
+
+def _storyboard_segment() -> "Segment":
+    from server.domain.entities import H3Prompt, Segment, Shot
+
+    return Segment(
+        segment_key="S01G01",
+        scene_id="S1",
+        index=1,
+        duration_sec=10,
+        shots=[Shot(shot_no=1, cutpoint_sec=10, camera="wide", description="d", action="a")],
+        h3_prompt=H3Prompt(text=""),
+    )
+
+
+def test_h3_storyboard_sentence_injected() -> None:
+    """storyboard_reference=True 时 subject_definitions 注入宫格声明+防入画护栏。"""
+    from server.app.h3_compiler import compile_h3_prompt
+
+    prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True, storyboard_reference=True)
+    assert "storyboard reference" in prompt
+    assert "never appears on screen" in prompt
+
+
+def test_h3_no_storyboard_sentence_by_default() -> None:
+    """缺省不注入宫格声明句（仅 <Picture 1> 是宫格时由调用方传参启用）。"""
+    from server.app.h3_compiler import compile_h3_prompt
+
+    prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True)
+    assert "storyboard reference" not in prompt
