@@ -973,16 +973,29 @@ def test_reroll_with_cell_no(tmp_path) -> None:
 
 
 def test_upload_with_cell_no(tmp_path) -> None:
-    """上传关键帧行带 cell_no=1 → 行 grid_cell=1（页面上传格子图通道）。"""
+    """上传关键帧行带 cell_no=1 → 行 grid_cell=1（页面上传格子图通道）；
+    预置宫格行时上传换格同样作废旧宫格（与生成路径口径一致）。"""
+    from server.domain.entities import STORYBOARD_GRID_LABEL, SegmentFrameImage
+    from server.domain.enums import AssetImageStatus
+
     svc, ctx, pid = _grid_enqueue_fixture(
         tmp_path, [_two_shot_grid_segment()], through_keyframes=True
+    )
+    ctx.frames.add(
+        SegmentFrameImage(
+            frame_image_id="frm-grid", project_id=pid, segment_key="S01G01",
+            version_no=1, view_label=STORYBOARD_GRID_LABEL,
+            prompt="storyboard grid", provider="pillow",
+            file_path=f"{pid}/storyboards/S01G01_grid_old.jpg",
+            status=AssetImageStatus.READY, approved=True,
+        )
     )
     svc.dispatch(pid, "upload_frame_image", {
         "segment_key": "S01G01", "content": b"png-bytes", "ext": ".png", "cell_no": 1,
     })
     rows = ctx.frames.list_by_segment(pid, "S01G01")
-    assert len(rows) == 1
-    assert rows[0].grid_cell == 1
+    assert all(r.view_label != STORYBOARD_GRID_LABEL for r in rows)
+    assert [r.grid_cell for r in rows] == [1]
 
 
 def test_reroll_invalidates_grid(tmp_path) -> None:
@@ -1006,3 +1019,35 @@ def test_reroll_invalidates_grid(tmp_path) -> None:
     remaining = ctx.frames.list_by_segment(pid, "S01G01")
     assert all(r.view_label != STORYBOARD_GRID_LABEL for r in remaining)
     assert any(r.grid_cell == 1 for r in remaining)  # 重抽格本身还在
+
+
+def test_cell_no_out_of_range_raises(tmp_path) -> None:
+    """2-shot 段单抽 cell_no=3 → 抛 DomainError，不入队不建行。"""
+    import pytest
+
+    from server.domain.errors import DomainError
+
+    svc, ctx, pid = _grid_enqueue_fixture(
+        tmp_path, [_two_shot_grid_segment()], through_keyframes=True
+    )
+    with pytest.raises(DomainError) as exc_info:
+        svc.dispatch(pid, "generate_frame_image",
+                     {"segment_key": "S01G01", "cell_no": 3})
+    assert exc_info.value.code == "INVALID_CELL_NO"
+    assert ctx.frames.list_by_segment(pid, "S01G01") == []
+
+
+def test_cell_no_zero_raises(tmp_path) -> None:
+    """单抽 cell_no=0（格号 1 起）→ 抛 DomainError，不入队不建行。"""
+    import pytest
+
+    from server.domain.errors import DomainError
+
+    svc, ctx, pid = _grid_enqueue_fixture(
+        tmp_path, [_two_shot_grid_segment()], through_keyframes=True
+    )
+    with pytest.raises(DomainError) as exc_info:
+        svc.dispatch(pid, "generate_frame_image",
+                     {"segment_key": "S01G01", "cell_no": 0})
+    assert exc_info.value.code == "INVALID_CELL_NO"
+    assert ctx.frames.list_by_segment(pid, "S01G01") == []

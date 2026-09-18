@@ -1670,6 +1670,11 @@ class WorkbenchService:
         seed = int(seed_payload) if seed_payload not in (None, "") else None
         raw_cell = payload.get("cell_no")
         cell_no = int(raw_cell) if raw_cell not in (None, "") else None
+        if cell_no is not None and not (1 <= cell_no <= len(segment.shots)):
+            raise DomainError(
+                "INVALID_CELL_NO",
+                f"cell_no={cell_no} 超出该分镜镜头范围（1..{len(segment.shots)}）",
+            )
         raw_images = payload.get("reference_asset_image_ids")
         reference_image_ids = (
             [str(i) for i in raw_images] if isinstance(raw_images, list) else None
@@ -1688,16 +1693,26 @@ class WorkbenchService:
     def cmd_upload_frame_image(self, project, payload) -> CommandResult:
         """multipart 上传关键帧：payload 携带已读字节与元数据（路由层组装）。
 
-        多宫格方案A：payload 带 cell_no（1 起）时该行标记为对应格子的上传行。
+        多宫格方案A：payload 带 cell_no（1 起）时该行标记为对应格子的上传行，
+        并作废旧宫格分镜板（与生成路径口径一致）；cell_no 越界直接拒绝。
         """
         _, segments = self._active_segments(project.project_id)
         key = str(payload.get("segment_key", ""))
-        if not any(s.segment_key == key for s in segments):
+        segment = next((s for s in segments if s.segment_key == key), None)
+        if segment is None:
             raise DomainError("NOT_FOUND", f"段不存在：{key}")
         content: bytes = payload["content"]
         ext = str(payload.get("ext") or ".png")
         raw_cell = payload.get("cell_no")
         cell_no = int(raw_cell) if raw_cell not in (None, "") else None
+        if cell_no is not None and not (1 <= cell_no <= len(segment.shots)):
+            raise DomainError(
+                "INVALID_CELL_NO",
+                f"cell_no={cell_no} 超出该分镜镜头范围（1..{len(segment.shots)}）",
+            )
+        if cell_no is not None:
+            # 上传换格 → 旧宫格分镜板作废（与生成路径口径一致）
+            self._invalidate_storyboard_grid(project.project_id, key)
         image_id = _uuid()
         rel = uploaded_frame_rel(project.project_id, image_id, ext)
         abs_media_path(self.ctx.settings, rel).parent.mkdir(parents=True, exist_ok=True)
