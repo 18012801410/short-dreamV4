@@ -821,3 +821,28 @@ def test_grid_reuse_same_digest(tmp_path) -> None:
         stat_before.st_mtime_ns,
         stat_before.st_size,
     )
+
+
+def test_grid_digest_changes_with_cols(tmp_path) -> None:
+    """digest 掺入列数配置：同组格子、不同 cols 返回不同宫格（不复用旧列数拼图）。"""
+    from server.app.usecases import _compose_storyboard_grid
+
+    settings = _make_grid_settings(tmp_path)
+    cell_paths = _make_grid_cells(settings)
+
+    rel3 = _compose_storyboard_grid(settings, "p1", "S01G01", cell_paths)
+    settings.storyboard_grid_cols = 2
+    rel2 = _compose_storyboard_grid(settings, "p1", "S01G01", cell_paths)
+
+    assert rel3 != rel2
+
+
+def test_grid_empty_cell_list_raises(tmp_path) -> None:
+    """空格子列表：入口直接拒绝（防 min() 空序列 ValueError 与空组文件名摘要）。"""
+    import pytest
+
+    from server.app.usecases import _compose_storyboard_grid
+
+    settings = _make_grid_settings(tmp_path)
+    with pytest.raises(ValueError, match="至少一张格子图"):
+        _compose_storyboard_grid(settings, "p1", "S01G01", [])

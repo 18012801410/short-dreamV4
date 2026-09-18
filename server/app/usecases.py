@@ -20,6 +20,7 @@ from server.app.media import (
     segment_frame_rel,
     segment_video_rel,
     size_for_asset_card,
+    storyboard_rel,
     uploaded_frame_rel,
     uploaded_image_rel,
 )
@@ -127,15 +128,20 @@ def _compose_storyboard_grid(
 
     布局：storyboard_grid_cols 列、按格号顺序排布、白底 12px 分隔、每行居中。
     格子由同尺寸生图产出（size_for_asset_card），天然对齐；防御性等比缩放。
-    文件名取格路径摘要：同组格子复用同一张宫格，重复同步不重复落盘。
+    文件名取「列数+格路径」摘要：同组格子同配置复用同一张宫格；改列数后
+    digest 变化，重拼新图而非复用旧列数的宫格。
     """
     import hashlib
 
     from PIL import Image
 
-    from server.app.media import storyboard_rel
-
-    digest = hashlib.md5("\n".join(cell_rel_paths).encode("utf-8")).hexdigest()[:16]
+    if not cell_rel_paths:
+        raise ValueError("storyboard grid 需要至少一张格子图")
+    # 列数参与布局也参与摘要：先于 digest 与缩放定好，避免 getattr 重复读取
+    cols = max(1, int(getattr(settings, "storyboard_grid_cols", 3)))
+    digest = hashlib.md5(
+        (f"cols={cols}\n" + "\n".join(cell_rel_paths)).encode("utf-8")
+    ).hexdigest()[:16]
     rel = storyboard_rel(project_id, segment_key, digest)
     dest = abs_media_path(settings, rel)
     if dest.exists():
@@ -144,7 +150,6 @@ def _compose_storyboard_grid(
     for p in cell_rel_paths:
         with Image.open(abs_media_path(settings, p)) as im:
             images.append(im.convert("RGB"))
-    cols = max(1, int(getattr(settings, "storyboard_grid_cols", 3)))
     cell_h = min(im.height for im in images)
     scaled = [
         im.resize((max(1, round(im.width * cell_h / im.height)), cell_h))
