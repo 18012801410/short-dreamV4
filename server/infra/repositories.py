@@ -110,6 +110,46 @@ class ProjectRepo:
         with self._engine.connect() as conn:
             return [self._to_domain(r) for r in conn.execute(stmt)]
 
+    def delete_project_cascade(self, project_id: str) -> dict[str, int]:
+        """级联删除项目全部数据行（单事务，供「删除项目」用例）。
+
+        删除顺序按依赖：provider_calls（经 jobs 关联）→ jobs → clips → films →
+        segment_frame_images → asset_images（经 assets 关联）→ assets →
+        script_versions → storyboard_versions → projects。
+        媒体文件不在此处理（归档回收由用例层负责）。
+
+        返回各表删除行数（键为表名），便于用例层向用户报账。
+        """
+        by_pid = lambda t: t.c.project_id == project_id  # noqa: E731
+        with self._engine.begin() as conn:
+            counts: dict[str, int] = {}
+            counts["provider_calls"] = conn.execute(
+                sa.delete(provider_calls).where(
+                    provider_calls.c.job_id.in_(
+                        sa.select(jobs.c.job_id).where(by_pid(jobs))
+                    )
+                )
+            ).rowcount
+            counts["jobs"] = conn.execute(sa.delete(jobs).where(by_pid(jobs))).rowcount
+            counts["asset_images"] = conn.execute(
+                sa.delete(asset_images).where(
+                    asset_images.c.asset_id.in_(
+                        sa.select(assets.c.asset_id).where(by_pid(assets))
+                    )
+                )
+            ).rowcount
+            for name, table in (
+                ("clips", clips),
+                ("films", films),
+                ("segment_frame_images", segment_frame_images),
+                ("assets", assets),
+                ("script_versions", script_versions),
+                ("storyboard_versions", storyboard_versions),
+                ("projects", projects),
+            ):
+                counts[name] = conn.execute(sa.delete(table).where(by_pid(table))).rowcount
+            return counts
+
     def _to_domain(self, row: sa.Row) -> Project:
         values = _load_datetimes(_row_to_dict(row), self.DT_FIELDS)
         return Project.model_validate(values)

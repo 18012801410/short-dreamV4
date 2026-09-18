@@ -16,6 +16,7 @@ from server.app.context import AppContext
 from server.app.handlers import new_id
 from server.app.media import (
     abs_media_path,
+    reference_sheet_rel,
     segment_frame_rel,
     segment_video_rel,
     size_for_asset_card,
@@ -76,6 +77,49 @@ def _random_seed() -> int:
     return random.randint(0, 2**31 - 1)
 
 
+# 拼合设定表单张最多容纳的资产卡数（过多会被 VL 编码缩得看不清，超出舍弃）
+REFERENCE_SHEET_MAX = 4
+
+
+def _compose_reference_sheet(settings, project_id: str, rel_paths: list[str]) -> str:
+    """把多张资产卡横向拼成一张「参考设定表」，落盘 media 目录并返回相对路径。
+
+    Edit 工作流参考槽硬上限 3 张（`TextEncodeQwenImageEditPlus` 节点只收
+    image1/2/3），关键帧在场资产超过 3 个时，把多余卡片按序横拼成一张设定表
+    占用第 3 槽（Qwen-VL 对 side-by-side character sheet 的理解可用）。
+    文件名取路径列表摘要：同组卡片复用同一张拼图，重复生成不重复落盘。
+    """
+    import hashlib
+
+    from PIL import Image
+
+    digest = hashlib.md5("\n".join(rel_paths).encode("utf-8")).hexdigest()[:16]
+    rel = reference_sheet_rel(project_id, digest)
+    dest = abs_media_path(settings, rel)
+    if dest.exists():
+        return rel
+    images = []
+    for p in rel_paths:
+        with Image.open(abs_media_path(settings, p)) as im:
+            images.append(im.convert("RGB"))
+    # 等高缩放（取中位高度为基准，避免单张超高图把其他卡压得过小），白底左起拼接
+    target_h = sorted(im.height for im in images)[len(images) // 2]
+    scaled = [
+        im.resize((max(1, round(im.width * target_h / im.height)), target_h))
+        for im in images
+    ]
+    gap = 24
+    width = sum(im.width for im in scaled) + gap * (len(scaled) - 1)
+    canvas = Image.new("RGB", (width, target_h), (255, 255, 255))
+    x = 0
+    for im in scaled:
+        canvas.paste(im, (x, 0))
+        x += im.width + gap
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(dest, quality=92)
+    return rel
+
+
 _PRIMARY_LABEL_HINTS = ("主设定", "空镜")
 
 
@@ -127,6 +171,44 @@ class WorkbenchService:
         if include_archived:
             return projects
         return [p for p in projects if p.status is not ProjectStatus.ARCHIVED]
+
+    def delete_project(self, pid: str) -> dict:
+        """硬删除项目（用户显式指令）：DB 全部关联行级联清除 + 媒体文件归档回收。
+
+        - 有 pending/running 任务时拒绝：在途任务写回已删项目会造成脏数据，
+          且视频/图片任务的回调轮询会因项目缺失而错乱（先取消或等跑完再删）。
+        - 媒体不物理删除：`data/media/{pid}` 整目录移入 `data/trash/{pid}_{时间戳}`
+          （工作区规则：删用户数据前留可校验的备份），确认无需恢复后可手动清空。
+        """
+        project = self.get_project(pid)
+        busy = [
+            j for j in self.ctx.jobs.list_all()
+            if j.project_id == pid
+            and j.status in (JobStatus.PENDING, JobStatus.RUNNING)
+        ]
+        if busy:
+            raise DomainError(
+                "STATE_ILLEGAL",
+                f"项目有 {len(busy)} 个进行中/排队任务，请先取消或等其结束后再删除",
+                details={"job_ids": [j.job_id for j in busy]},
+            )
+        counts = self.ctx.projects.delete_project_cascade(pid)
+        media_src = self.ctx.settings.media_dir / pid
+        moved_to = ""
+        if media_src.exists():
+            import shutil
+            import time
+
+            trash_root = self.ctx.settings.data_dir / "trash"
+            trash_root.mkdir(parents=True, exist_ok=True)
+            moved_to = str(trash_root / f"{pid}_{time.strftime('%Y%m%d_%H%M%S')}")
+            shutil.move(str(media_src), moved_to)
+        return {
+            "project_id": pid,
+            "title": project.title,
+            "deleted_rows": counts,
+            "media_moved_to": moved_to,
+        }
 
     def translate_prompt(
         self, pid: str, text: str, mode: str = "t2i", current_prompt: str = ""
@@ -1278,7 +1360,7 @@ class WorkbenchService:
     def _segment_reference_cards(self, pid: str, segment) -> list[str]:
         """段开场帧的图生图参考图（Edit 通道，TASK-031/033）。
 
-        组成（≤3 张）：**画面内角色身份卡**（≤2）+ **场景卡**。
+        组成（不设上限）：**画面内角色身份卡**（按序全部）+ **场景卡**。
         - 只传 in_frame 的角色：图生图模型"给谁的脸就摆谁"，送进不在构图里的卡会
           补出第二个人、两卡特征还会互串（实测：坐着的乘客挂上了司机的工牌）。
         - 道具卡不传：白底产品图对场景静帧没有身份价值，只带来白底/物件漂移。
@@ -1286,6 +1368,10 @@ class WorkbenchService:
           （无论放 [img0] 还是末位），本段构图都会被它带跑——后视镜特写被画成上一段的
           侧拍司机。场景一致性因此不靠关键帧继承，而由视频阶段（H3 拿场景卡 + 本段
           关键帧作 Picture 1）与连续段尾帧接力承担。
+
+        槽位分派（Edit 工作流只有 3 个参考槽）在 `_resolve_reference_slots`：
+        总数 ≤3 逐槽原样送入；>3 时前 2 张各占一槽，其余拼成设定表占第 3 槽
+        （旧口径"≥3 角色丢场景卡"已废弃——拼表后场景卡不再需要让位）。
         """
         from server.app.h3_compiler import in_frame_by_name
 
@@ -1303,17 +1389,7 @@ class WorkbenchService:
                 scene = asset
         picked: list[str] = []
         scene_cards = [scene] if scene is not None else []
-        # 槽位分配（TASK-045 实测）：Edit 工作流只有 3 个参考槽。
-        # - 在场角色 ≤2：角色卡 + 场景卡（身份与空间都锁）。
-        # - 在场角色 ≥3：3 个槽全给角色卡。第三个人没有卡时会被画成"参考里某个人的
-        #   复制品"（实测 S02G04：小伙伴乙没卡 → 直接消失，右边出现第二个小伙伴甲，
-        #   同款红条纹衣+同发型）；场景一致性交回视频阶段（H3 带场景卡 + 本帧作
-        #   Picture 1）与连续段尾帧接力。
-        if len(characters) >= 3:
-            ordered = characters[:3]
-        else:
-            ordered = [*characters[:2], *scene_cards]
-        for asset in ordered:
+        for asset in [*characters, *scene_cards]:
             approved = [
                 i for i in self.ctx.assets.list_images(asset_id=asset.asset_id) if i.approved
             ]
@@ -1322,8 +1398,6 @@ class WorkbenchService:
             primary = _pick_primary_image(approved, asset.kind)
             if primary.file_path and primary.file_path not in picked:
                 picked.append(primary.file_path)
-            if len(picked) == 3:
-                break
         return picked
 
     def _enqueue_frame_job(
@@ -1353,15 +1427,19 @@ class WorkbenchService:
         # 图生图参考通道（可选）：配置了 Edit 工作流时，把资产卡作为参考图随任务
         # 上传（锁脸）；留空 = 纯文生图路径
         if reference_image_ids is not None:
-            reference_rel_paths = self._reference_paths_by_image_ids(
+            raw_paths = self._reference_paths_by_image_ids(
                 project.project_id, reference_image_ids
             )
         elif self.ctx.settings.runninghub_workflow_image_edit:
-            reference_rel_paths = self._segment_reference_cards(
+            raw_paths = self._segment_reference_cards(
                 project.project_id, segment
             )
         else:
-            reference_rel_paths = []
+            raw_paths = []
+        # 槽位分派：>3 个资产时多余卡片拼成设定表（Edit 工作流只有 3 个参考槽）
+        reference_rel_paths, reference_bindings = self._resolve_reference_slots(
+            project.project_id, raw_paths
+        )
         if prompt_override.strip():
             prompt = prompt_override.strip()
         else:
@@ -1376,9 +1454,7 @@ class WorkbenchService:
                 style_line=project.params.style or DEFAULT_STYLE_LINE,
                 extra_prompt=extra_prompt,
                 include_identity_anchors=not reference_rel_paths,
-                reference_bindings=self._assets_for_reference_paths(
-                    project.project_id, reference_rel_paths
-                ),
+                reference_bindings=reference_bindings,
                 aspect=project.params.ratio,
             )
         width, height = size_for_asset_card(project.params.ratio)
@@ -1422,14 +1498,22 @@ class WorkbenchService:
             return []
         return self._segment_reference_cards(pid, segment)
 
-    def _assets_for_reference_paths(self, pid: str, paths: list[str]) -> list:
-        """参考图相对路径 → 资产（按送入顺序），供 I2I 指令写 [imgX] 保留项。
+    def _resolve_reference_slots(self, pid: str, paths: list[str]) -> tuple[list[str], list]:
+        """把选中的参考路径分派进 Edit 工作流的 3 个参考槽（>3 资产的拼表方案）。
 
-        以"已批准主图路径"匹配：同一资产只有一张主图进参考，映射唯一。
+        - 总数 ≤3：逐槽原样送入，Picture 1/2/3 与资产一一对应。
+        - 总数 >3（`TextEncodeQwenImageEditPlus` 节点硬上限 image1/2/3）：前 2 张
+          各占一槽，其余资产卡（含场景卡，超出 REFERENCE_SHEET_MAX 张舍弃）横向
+          拼成一张「设定表」占第 3 槽；提示词 bindings 里以 ReferenceSheet 逐卡
+          声明从左到右是谁。
+
+        返回（槽位路径列表, 提示词 bindings：Asset | ReferenceSheet）。
+        以"已批准主图路径"匹配资产：同一资产只有一张主图进参考，映射唯一。
         """
-        assets = self.ctx.assets.list_assets(pid)
-        by_path = {}
-        for asset in assets:
+        from server.app.h3_compiler import ReferenceSheet
+
+        by_path: dict[str, Asset] = {}
+        for asset in self.ctx.assets.list_assets(pid):
             approved = [
                 i for i in self.ctx.assets.list_images(asset_id=asset.asset_id) if i.approved
             ]
@@ -1438,7 +1522,15 @@ class WorkbenchService:
             primary = _pick_primary_image(approved, asset.kind)
             if primary.file_path:
                 by_path.setdefault(primary.file_path, asset)
-        return [by_path[p] for p in paths if p in by_path]
+
+        def bind(ps: list[str]) -> list[Asset]:
+            return [by_path[p] for p in ps if p in by_path]
+
+        if len(paths) <= 3:
+            return list(paths), bind(paths)
+        solo, extras = list(paths[:2]), list(paths[2:REFERENCE_SHEET_MAX + 2])
+        sheet_rel = _compose_reference_sheet(self.ctx.settings, pid, extras)
+        return [*solo, sheet_rel], [*bind(solo), ReferenceSheet(assets=bind(extras))]
 
     def _reference_paths_by_image_ids(
         self, pid: str, image_ids: list[str]

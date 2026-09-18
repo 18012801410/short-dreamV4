@@ -52,6 +52,15 @@ def get_project(request: Request, pid: str):
     return data
 
 
+@router.delete("/projects/{pid}")
+def delete_project(request: Request, pid: str):
+    """硬删除项目：级联清 DB 全部关联行，媒体文件移入 data/trash（可手动恢复）。
+
+    有 pending/running 任务时返回 409（先取消或等跑完）。
+    """
+    return _svc(request).delete_project(pid)
+
+
 def _stage_stats(svc, pid: str, sb) -> dict:
     clips = {c.segment_key: c for c in svc.ctx.clips.list_by_project(pid)}
     segments = list(sb.content.segments) if sb else []

@@ -27,6 +27,7 @@ subject_placements），六段式 reference 提示词由本模块从已通过校
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 from server.domain.entities import Asset, Segment
 from server.domain.validation import _cutpoint_label
@@ -420,13 +421,33 @@ KEYFRAME_NEGATIVE = (
 )
 
 
+@dataclass
+class ReferenceSheet:
+    """拼合参考图绑定（Edit 工作流只有 3 个参考槽时的超编资产载体）。
+
+    多张资产卡横向拼成一张「设定表」占一个 Picture 槽，提示词里逐个声明
+    sheet 从左到右是谁，身份锁定句沿用同一槽位指称。
+    """
+
+    assets: list[Asset]
+
+
+def _ref_card_phrase(asset: Asset) -> str:
+    """单张参考卡在 I2I 指令里的指称短语（Picture N is ...）。"""
+    if asset.kind.value == "character":
+        return f"{asset.name}'s character reference card"
+    if asset.kind.value == "scene":
+        return f"a wide-angle overview of the same location（{asset.name}）"
+    return f"the reference card of {asset.name}"
+
+
 def compile_keyframe_prompt(
     segment: Segment,
     assets_by_id: dict[str, Asset],
     style_line: str = "",
     extra_prompt: str = "",
     include_identity_anchors: bool = True,
-    reference_bindings: list[Asset] | None = None,
+    reference_bindings: list | None = None,
     aspect: str = "",
 ) -> str:
     """编译段开场锚点关键帧的 **I2I 编辑指令**（TASK-031/036/045）。
@@ -528,16 +549,17 @@ def compile_keyframe_prompt(
     # 只描述每张参考图"是什么"，不给"空间结构不变"式锁（空座位会被锁住，TASK-037），
     # 也不写"景别按文字来"之类的元指令——那是对导演说的话，扩散模型只当噪声。
     ref_map: list[str] = []
-    for index, asset in enumerate(bindings):
+    for index, binding in enumerate(bindings):
         label = f"Picture {index + 1}"
-        if asset.kind.value == "character":
-            ref_map.append(f"{label} is {asset.name}'s character reference card")
-        elif asset.kind.value == "scene":
+        if isinstance(binding, ReferenceSheet):
+            # 拼合设定表：逐卡声明从左到右的顺序，与落盘拼图的实际排列一致
+            entries = "；".join(_ref_card_phrase(a) for a in binding.assets)
             ref_map.append(
-                f"{label} is a wide-angle overview of the same location（{asset.name}）"
+                f"{label} is a side-by-side reference sheet, "
+                f"from left to right: {entries}"
             )
         else:
-            ref_map.append(f"{label} is the reference card of {asset.name}")
+            ref_map.append(f"{label} is {_ref_card_phrase(binding)}")
     if scene_lines:
         parts.append(f"background: {scene_lines[0]}")
     if prop_lines:

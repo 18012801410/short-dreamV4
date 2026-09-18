@@ -19,6 +19,7 @@ from server.domain.entities import JobType
 from server.domain.enums import ProjectStatus
 from server.infra.config import Settings
 from server.infra.tables import metadata
+from server.tests.factories import make_segment
 
 FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
 
@@ -946,3 +947,109 @@ def test_asset_extract_handler_refused_when_worker_runs_stale_code(monkeypatch, 
     with pytest.raises(DomainError) as exc:
         handlers.handle_asset_extract(job)
     assert exc.value.code == "STALE_CODE"
+
+
+def test_delete_project_cascades_db_and_archives_media(tmp_path) -> None:
+    """删除项目：DB 全部关联行级联清除、媒体目录移入 data/trash、在途任务拒绝。"""
+    import sqlalchemy as sa
+
+    from server.domain.entities import (
+        Asset,
+        AssetImage,
+        Job,
+        ProviderCall,
+        Scene,
+        ScriptContent,
+        ScriptVersion,
+        SegmentFrameImage,
+        StoryboardContent,
+        StoryboardVersion,
+    )
+    from server.domain.enums import AssetImageStatus, AssetKind, JobStatus, WorkStatus
+    from server.domain.errors import DomainError
+
+    settings = Settings(data_dir=tmp_path, _env_file=None)
+    settings.media_dir.mkdir(parents=True, exist_ok=True)
+    engine = sa.create_engine(
+        f"sqlite:///{tmp_path/'del.db'}", connect_args={"check_same_thread": False}
+    )
+    metadata.create_all(engine)
+    ctx = AppContext.build(settings, engine)
+    svc = WorkbenchService(ctx)
+    pid = svc.create_project("待删", "想法", {}).project_id
+
+    ctx.scripts.add(
+        ScriptVersion(
+            script_version_id="sv-1", project_id=pid, version_no=1,
+            content=ScriptContent(
+                logline="x",
+                scenes=[Scene(id="S01", title="t", summary="s", est_seconds=5)],
+                characters=[{"name": "老船工", "profile": "x"}],
+                props=[],
+                warnings=[],
+            ),
+            status=WorkStatus.ACTIVE,
+        )
+    )
+    ctx.storyboards.add(
+        StoryboardVersion(
+            storyboard_version_id="sbv-1", project_id=pid, version_no=1,
+            content=StoryboardContent(segments=[make_segment()]), status=WorkStatus.ACTIVE,
+        )
+    )
+    ctx.assets.add_asset(
+        Asset(asset_id="a-1", project_id=pid, kind=AssetKind.CHARACTER, name="老船工")
+    )
+    ctx.assets.add_image(
+        AssetImage(
+            asset_image_id="img-1", asset_id="a-1", version_no=1, view_label="主设定",
+            file_path=f"{pid}/assets/a-1.png",
+            status=AssetImageStatus.READY, approved=True,
+        )
+    )
+    ctx.frames.add(
+        SegmentFrameImage(
+            frame_image_id="frm-1", project_id=pid, segment_key="S01G01", version_no=1,
+        )
+    )
+    ctx.jobs.insert(
+        Job(job_id="job-1", project_id=pid, type=JobType.SCRIPT_GEN, status=JobStatus.SUCCEEDED)
+    )
+    ctx.calls.add(ProviderCall(call_id="call-1", job_id="job-1", provider="llm"))
+    media = settings.media_dir / pid / "assets" / "a-1.png"
+    media.parent.mkdir(parents=True, exist_ok=True)
+    media.write_bytes(b"png")
+
+    # 在途任务（pending/running）拒绝删除，避免在途回调写回已删项目
+    ctx.jobs.insert(
+        Job(job_id="job-2", project_id=pid, type=JobType.IMAGE_GEN, status=JobStatus.RUNNING)
+    )
+    with pytest.raises(DomainError) as exc:
+        svc.delete_project(pid)
+    assert exc.value.code == "STATE_ILLEGAL"
+
+    job2 = ctx.jobs.get("job-2")
+    job2.status = JobStatus.CANCELLED
+    ctx.jobs.save(job2)
+    result = svc.delete_project(pid)
+
+    assert result["title"] == "待删"
+    assert ctx.projects.get(pid) is None
+    assert ctx.scripts.list_by_project(pid) == []
+    assert ctx.storyboards.list_by_project(pid) == []
+    assert ctx.assets.list_assets(pid) == []
+    assert ctx.assets.list_images(project_id=pid) == []
+    assert ctx.frames.list_by_project(pid) == []
+    assert ctx.clips.list_by_project(pid) == []
+    assert [j for j in ctx.jobs.list_all() if j.project_id == pid] == []
+    assert result["deleted_rows"]["projects"] == 1
+    assert result["deleted_rows"]["asset_images"] == 1
+    assert result["deleted_rows"]["provider_calls"] == 1
+    # 媒体文件不物理删除：整目录移入 data/trash（可人工恢复）
+    assert not media.exists()
+    assert (Path(result["media_moved_to"]) / "assets" / "a-1.png").exists()
+
+    # 重复删除 → NOT_FOUND
+    with pytest.raises(DomainError) as exc2:
+        svc.delete_project(pid)
+    assert exc2.value.code == "NOT_FOUND"

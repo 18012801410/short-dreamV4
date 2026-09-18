@@ -80,6 +80,18 @@ export function useCreateProject() {
   })
 }
 
+/** 删除项目：硬删除（DB 级联清除 + 媒体移入 data/trash），成功后刷新项目列表 */
+export function useDeleteProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (pid: string) => api.deleteProject(pid),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['projects'] })
+      void qc.invalidateQueries({ queryKey: ['series'] })
+    },
+  })
+}
+
 export function useProject(pid: string) {
   return useQuery({
     queryKey: ['project', pid],

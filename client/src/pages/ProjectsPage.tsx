@@ -5,6 +5,7 @@ import {
   isProjectBusy,
   projectStatusLabel,
   useCreateProject,
+  useDeleteProject,
   useHealth,
   useProjects,
   useSeriesList,
@@ -137,6 +138,7 @@ function CreateProjectForm({ onCreated }: { onCreated: (pid: string) => void }) 
 export default function ProjectsPage() {
   const { data: health } = useHealth()
   const { data, isLoading } = useProjects()
+  const deleteProject = useDeleteProject()
   // 系列聚合（用户拍板：首页每部剧一张卡，单集不单列；点开进系列页看各集）
   const { data: seriesData } = useSeriesList()
   const seriesRows = seriesData?.series ?? []
@@ -282,6 +284,27 @@ export default function ProjectsPage() {
                     }}
                   >
                     归档
+                  </button>
+                  <button
+                    className="text-xs text-ink-dim hover:text-danger disabled:opacity-40"
+                    disabled={deleteProject.isPending}
+                    onClick={() => {
+                      // 两次确认：硬删除不可撤销（DB 记录清除，媒体文件移入回收目录）
+                      if (
+                        !window.confirm(
+                          `确认删除项目「${project.title}」？\n\n` +
+                            '将删除其剧本、资产、分镜、关键帧、视频等全部数据，媒体文件会移入 data/trash 目录（可手动恢复）。',
+                        )
+                      )
+                        return
+                      if (!window.confirm('再次确认：删除后无法从页面恢复，确定继续？')) return
+                      deleteProject.mutate(project.id, {
+                        onError: (err) =>
+                          window.alert(err instanceof ApiError ? err.message : String(err)),
+                      })
+                    }}
+                  >
+                    删除
                   </button>
                 </div>
               </li>

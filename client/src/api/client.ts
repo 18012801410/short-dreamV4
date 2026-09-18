@@ -41,6 +41,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const apiGet = <T,>(path: string) => request<T>('GET', path)
 export const apiPost = <T,>(path: string, body?: unknown) => request<T>('POST', path, body ?? {})
 export const apiPut = <T,>(path: string, body?: unknown) => request<T>('PUT', path, body ?? {})
+export const apiDelete = <T,>(path: string) => request<T>('DELETE', path)
 
 // ---- 类型（与 API_SPEC 对应） ----
 
@@ -387,6 +388,10 @@ export const api = {
   getProject: (pid: string) => apiGet<Project>(`/projects/${pid}`),
   createProject: (title: string, idea: string, params: Partial<ProjectParams>) =>
     apiPost<{ project: Project }>('/projects', { title, idea, params }),
+  deleteProject: (pid: string) =>
+    apiDelete<{ ok?: boolean; deleted_rows?: Record<string, number>; media_moved_to?: string }>(
+      `/projects/${pid}`,
+    ),
   command: (pid: string, type: string, payload?: Record<string, unknown>) =>
     apiPost<{ ok?: boolean; jobs?: Job[]; project?: Project; stopped?: boolean }>(
       `/projects/${pid}/commands`,

@@ -165,12 +165,12 @@ def test_create_asset_at_frame_ready_invalidates_assets(tmp_path) -> None:
     assert result["asset"].name == "雷震"
 
 
-def test_reference_cards_three_in_frame_characters_drop_scene_card(tmp_path) -> None:
-    """TASK-045：3 人同框时 3 个槽全给角色卡、场景卡让位。
+def test_reference_cards_three_in_frame_characters_keep_scene_card(tmp_path) -> None:
+    """拼表方案：3 人同框时角色卡全部入选，场景卡不再让位。
 
-    实测缺陷（逝去的童年 S02G04）：小伙伴乙没有参考卡 → 直接从画面消失，
-    右侧被画成第二个小伙伴甲（同款红条纹衣+同发型）。第三人没有卡时，
-    图生图模型只能拿参考里的人拼凑，牺牲场景卡换齐三张身份卡。
+    旧口径（TASK-045 实测缺陷，逝去的童年 S02G04）：小伙伴乙没有参考卡 → 直接从
+    画面消失，右侧被画成第二个小伙伴甲（同款红条纹衣+同发型），为此牺牲场景卡。
+    现在选卡不设上限，由 `_resolve_reference_slots` 把超编卡片拼成设定表。
     """
     import sqlalchemy as sa
 
@@ -231,6 +231,7 @@ def test_reference_cards_three_in_frame_characters_drop_scene_card(tmp_path) -> 
         f"{pid}/assets/a-kid1.png",
         f"{pid}/assets/a-kid2.png",
         f"{pid}/assets/a-kid3.png",
+        f"{pid}/assets/a-yard.png",
     ]
 
 
@@ -584,3 +585,87 @@ def test_reference_cards_do_not_chain_previous_frame(tmp_path) -> None:
         picked = svc._segment_reference_cards(pid, segment)
         assert picked == [f"{pid}/assets/c1.png", f"{pid}/assets/sc.png"]
         assert f"{pid}/frames/S01G01.png" not in picked
+
+
+def test_compile_keyframe_prompt_reference_sheet_wording() -> None:
+    """拼合设定表绑定：Picture N 指称变为 side-by-side reference sheet，
+    逐卡声明从左到右是谁（与落盘拼图的排列一致）。"""
+    from server.app.h3_compiler import ReferenceSheet
+
+    segment = make_segment(asset_refs=[{"asset_id": "a-face", "usage_note": ""}])
+    prompt = compile_keyframe_prompt(
+        segment,
+        {"a-face": _CHAR},
+        style_line="",
+        reference_bindings=[_CHAR, ReferenceSheet(assets=[_CHAR, _SCENE])],
+    )
+    assert "Picture 1 is 老船工's character reference card" in prompt
+    assert (
+        "Picture 2 is a side-by-side reference sheet, from left to right: "
+        "老船工's character reference card；"
+        "a wide-angle overview of the same location（夜色渡口）"
+    ) in prompt
+
+
+def test_resolve_reference_slots_merges_extras_into_sheet(tmp_path) -> None:
+    """>3 个资产：前 2 张各占一槽，其余拼成设定表占第 3 槽；拼图落盘且同组复用。"""
+    import sqlalchemy as sa
+
+    from PIL import Image
+
+    from server.app.context import AppContext
+    from server.app.h3_compiler import ReferenceSheet
+    from server.app.usecases import WorkbenchService
+    from server.domain.entities import Asset, AssetImage
+    from server.domain.enums import AssetImageStatus
+    from server.infra.config import Settings
+    from server.infra.tables import metadata
+
+    settings = Settings(data_dir=tmp_path, _env_file=None)
+    settings.media_dir.mkdir(parents=True, exist_ok=True)
+    engine = sa.create_engine(
+        f"sqlite:///{tmp_path/'slots.db'}", connect_args={"check_same_thread": False}
+    )
+    metadata.create_all(engine)
+    ctx = AppContext.build(settings, engine)
+    svc = WorkbenchService(ctx)
+    pid = "p-slots"
+
+    def add(asset_id: str, kind: AssetKind, name: str, label: str) -> None:
+        ctx.assets.add_asset(
+            Asset(asset_id=asset_id, project_id=pid, kind=kind, name=name,
+                  visual_anchor=f"{name} anchor")
+        )
+        rel = f"{pid}/assets/{asset_id}.png"
+        ctx.assets.add_image(
+            AssetImage(
+                asset_image_id=f"img-{asset_id}", asset_id=asset_id, version_no=1,
+                view_label=label, file_path=rel,
+                status=AssetImageStatus.READY, approved=True,
+            )
+        )
+        # 落一张真实小图（拼表函数要真开图）
+        dest = settings.media_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (768, 1024), (200, 180, 160)).save(dest)
+
+    for i in (1, 2, 3):
+        add(f"a-kid{i}", AssetKind.CHARACTER, f"小伙伴{'甲乙丙'[i - 1]}", "主设定")
+    add("a-yard", AssetKind.SCENE, "胡同空地", "空镜")
+
+    paths = [f"{pid}/assets/a-kid{i}.png" for i in (1, 2, 3)] + [
+        f"{pid}/assets/a-yard.png"
+    ]
+    slots, bindings = svc._resolve_reference_slots(pid, paths)
+    # 前 2 张各占一槽，第 3 槽是拼合设定表
+    assert slots[:2] == [f"{pid}/assets/a-kid1.png", f"{pid}/assets/a-kid2.png"]
+    assert slots[2].startswith(f"{pid}/refsheets/sheet_")
+    # 拼图真实落盘；同一组卡片再解析一次复用同一张拼图
+    assert (settings.media_dir / slots[2]).exists()
+    slots_again, _ = svc._resolve_reference_slots(pid, paths)
+    assert slots_again == slots
+    # bindings：独立槽 → Asset，拼合槽 → ReferenceSheet（顺序与拼图左起一致）
+    assert [b.name for b in bindings[:2]] == ["小伙伴甲", "小伙伴乙"]
+    sheet = bindings[2]
+    assert isinstance(sheet, ReferenceSheet)
+    assert [a.name for a in sheet.assets] == ["小伙伴丙", "胡同空地"]

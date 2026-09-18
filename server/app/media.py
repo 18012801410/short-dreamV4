@@ -44,6 +44,11 @@ def uploaded_image_rel(project_id: str, image_id: str, ext: str) -> str:
     return f"{project_id}/assets/uploaded_{image_id}{ext}"
 
 
+def reference_sheet_rel(project_id: str, digest: str, ext: str = ".jpg") -> str:
+    """多张资产卡横拼的「参考设定表」落盘路径（Edit 参考槽不足时用）。"""
+    return f"{project_id}/refsheets/sheet_{digest}{ext}"
+
+
 def abs_media_path(settings: Settings, rel: str) -> Path:
     return settings.media_dir / rel
 
