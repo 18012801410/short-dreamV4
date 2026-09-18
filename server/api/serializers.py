@@ -92,6 +92,7 @@ def frame_image_dto(image) -> dict[str, Any]:
         "segment_key": image.segment_key,
         "version_no": image.version_no,
         "view_label": image.view_label,
+        "grid_cell": image.grid_cell,
         "prompt": image.prompt,
         "file_path": image.file_path,
         "url": f"/media/{image.file_path}" if image.file_path else None,

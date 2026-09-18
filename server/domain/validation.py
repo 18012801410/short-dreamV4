@@ -23,6 +23,8 @@ from server.domain.errors import ValidationFailedError
 
 H3_PROMPT_MAX_CHARS = 7000
 MAX_REFERENCE_IMAGES = 9
+# 单段宫格最多格数（=取前 N 个 shot；超出的镜头交给视频模型按提示词发挥）
+MAX_GRID_CELLS = 6
 
 BASE_FIELDS = (
     "integrated_multimodal_description:",

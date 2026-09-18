@@ -375,6 +375,9 @@ class StoryboardVersion(DomainModel):
 # 关键帧：SegmentFrameImage（TASK-031，分镜确认后、视频前 per 段开场锚点图）
 # --------------------------------------------------------------------------
 
+# 宫格分镜板行的 view_label（每段最多一行，approved 后整张作视频 <Picture 1>）
+STORYBOARD_GRID_LABEL = "分镜板"
+
 
 class SegmentFrameImage(DomainModel):
     """一个分镜段的开场锚点关键帧图（镜像 AssetImage，挂 segment_key）。
@@ -388,6 +391,9 @@ class SegmentFrameImage(DomainModel):
     segment_key: str = Field(pattern=SEGMENT_KEY_RE.pattern)
     version_no: int = Field(ge=1)
     view_label: str = "开场锚点"
+    # 多宫格格号（1 起；None=非格子行）。宫格分镜板行本身 view_label="分镜板"
+    # 且 grid_cell=None；存量单张关键帧行 grid_cell=None，走旧口径不受影响。
+    grid_cell: int | None = Field(default=None, ge=1)
     prompt: str = ""
     provider: str = "minimax-image"
     provider_ref: str = ""

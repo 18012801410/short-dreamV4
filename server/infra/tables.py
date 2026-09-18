@@ -107,6 +107,7 @@ segment_frame_images = sa.Table(
     sa.Column("segment_key", sa.String(16), nullable=False, index=True),
     sa.Column("version_no", sa.Integer(), nullable=False),
     sa.Column("view_label", sa.String(64), nullable=False, server_default="开场锚点"),
+    sa.Column("grid_cell", sa.Integer(), nullable=True),
     sa.Column("prompt", sa.Text(), nullable=False, server_default=""),
     sa.Column("reference_paths", sa.JSON(), nullable=False, server_default="[]"),
     sa.Column("provider", sa.String(64), nullable=False, server_default="minimax-image"),

@@ -669,3 +669,35 @@ def test_resolve_reference_slots_merges_extras_into_sheet(tmp_path) -> None:
     sheet = bindings[2]
     assert isinstance(sheet, ReferenceSheet)
     assert [a.name for a in sheet.assets] == ["小伙伴丙", "胡同空地"]
+
+
+# --------------------------------------------------------------------------
+# 多宫格分镜板 Step1：SegmentFrameImage.grid_cell 格号字段
+# --------------------------------------------------------------------------
+
+
+class TestGridCellField:
+    def test_frame_row_accepts_grid_cell(self, tmp_path) -> None:
+        """带格号构造：宫格行按格号 1 起标记。"""
+        from server.domain.entities import SegmentFrameImage
+
+        row = SegmentFrameImage(
+            frame_image_id="frm-x",
+            project_id="p1",
+            segment_key="S01G01",
+            version_no=1,
+            grid_cell=2,
+        )
+        assert row.grid_cell == 2
+
+    def test_frame_row_default_grid_cell_none(self, tmp_path) -> None:
+        """不传格号：存量单张关键帧行 grid_cell=None，走旧口径不受影响。"""
+        from server.domain.entities import SegmentFrameImage
+
+        row = SegmentFrameImage(
+            frame_image_id="frm-x",
+            project_id="p1",
+            segment_key="S01G01",
+            version_no=1,
+        )
+        assert row.grid_cell is None
