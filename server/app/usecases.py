@@ -1574,18 +1574,33 @@ class WorkbenchService:
                 self.ctx.frames.delete(row.frame_image_id)
 
     def _sync_storyboard_grid(self, project, segment) -> SegmentFrameImage | None:
-        """格子批准状态变化后同步宫格：作废旧行，全部格就绪时重拼。
+        """格子/手动行批准状态变化后同步宫格：作废旧行，就绪时重拼。
 
         就绪口径：1..min(len(shots), MAX_GRID_CELLS) 每格至少一张已批准且
         已落盘、可被 PIL 识别的行（同格多版本取最新批准），缺失/假字节的
         格子跳过。未就绪则不留半成品宫格。单镜段（旧口径无格号）不拼宫格。
+
+        手动覆盖让位（设计 §5"手动图优先占 Picture 1"）：段内存在已批准的
+        无格号行、且其版本比所有格子行都新（用户在格子之后整段上传/重抽）
+        时，宫格只作废不重拼——否则刚作废的宫格会立即用同样的格子拼回来，
+        把用户手动批准的图重新遮住。之后格子行再变化（重抽某格并批准）时
+        该行不再比格子新，宫格恢复重拼（最后操作赢）。
         """
         from PIL import Image
 
         pid = project.project_id
         key = segment.segment_key
+        rows = self.ctx.frames.list_by_segment(pid, key)
+        cell_vers = [r.version_no for r in rows if r.grid_cell is not None]
+        manual_supersedes = any(
+            r.grid_cell is None
+            and r.approved
+            and r.view_label != STORYBOARD_GRID_LABEL
+            and r.version_no > max(cell_vers, default=0)
+            for r in rows
+        )
         self._invalidate_storyboard_grid(pid, key)
-        if len(segment.shots) <= 1:
+        if len(segment.shots) <= 1 or manual_supersedes:
             return None
         expected = min(len(segment.shots), MAX_GRID_CELLS)
         latest: dict[int, SegmentFrameImage] = {}
@@ -1797,16 +1812,34 @@ class WorkbenchService:
     def cmd_delete_frame_image(self, project, payload) -> CommandResult:
         """删除关键帧（清理旧版本）：只删库行，磁盘文件保留可恢复。
 
-        删的是格子行（grid_cell 非 None）→ 删后同步宫格：旧板作废，剩余格
-        仍就绪则重拼，否则不留半成品宫格。
+        删的是格子行（grid_cell 非 None）或段内有宫格/已批准手动覆盖行 →
+        删后同步宫格：旧板作废，剩余格仍就绪且无手动覆盖则重拼，否则不留
+        半成品宫格。删除已批准手动覆盖行时全格仍就绪 → 宫格恢复重拼。
+        删宫格行自身不触发（宫格是程序拼的派生物，删格子才会联动重拼）。
         """
         row = self.ctx.frames.get(str(payload.get("frame_image_id", "")))
         if row is None or row.project_id != project.project_id:
             raise DomainError("NOT_FOUND", f"关键帧不存在：{payload.get('frame_image_id')}")
+        # 触发判定用删除前的行集：宫格行排除被删行自身；手动行不排除
+        # （删除已批准手动覆盖行 → 同步时该行已不在 → 宫格恢复重拼）
+        rows = self.ctx.frames.list_by_segment(row.project_id, row.segment_key)
         was_cell = row.grid_cell is not None
+        has_grid = any(
+            i.view_label == STORYBOARD_GRID_LABEL
+            and i.frame_image_id != row.frame_image_id
+            for i in rows
+        )
+        has_manual = any(
+            i.grid_cell is None
+            and i.approved
+            and i.view_label != STORYBOARD_GRID_LABEL
+            for i in rows
+        )
         seg_key = row.segment_key
         self.ctx.frames.delete(row.frame_image_id)
-        if was_cell:
+        if row.view_label != STORYBOARD_GRID_LABEL and (
+            was_cell or has_grid or has_manual
+        ):
             segment = next(
                 (
                     s
@@ -1831,18 +1864,30 @@ class WorkbenchService:
             raise DomainError("STATE_ILLEGAL", "只有 ready/uploaded 图片可批准")
         row.approved = approved
         self.ctx.frames.save(row)
-        if row.grid_cell is not None:
-            # 格子批准状态变化 → 同步宫格（全格就绪时重拼，否则作废旧板）
-            segment = next(
-                (
-                    s
-                    for s in self._active_segments(project.project_id)[1]
-                    if s.segment_key == row.segment_key
-                ),
-                None,
+        if row.view_label != STORYBOARD_GRID_LABEL:
+            # 无格号行批准同样触发同步：段内有宫格时作废旧板（手动覆盖图
+            # 优先占 Picture 1，设计 §5）；无宫格时由 _sync_storyboard_grid
+            # 按就绪口径决定是否重拼，单镜段在同步函数内直接跳过。
+            # 宫格行自身的批准/取消不触发（宫格是程序拼的派生物，恒批准）。
+            rows = self.ctx.frames.list_by_segment(row.project_id, row.segment_key)
+            has_grid = any(i.view_label == STORYBOARD_GRID_LABEL for i in rows)
+            has_manual = any(
+                i.grid_cell is None
+                and i.approved
+                and i.view_label != STORYBOARD_GRID_LABEL
+                for i in rows
             )
-            if segment is not None:
-                self._sync_storyboard_grid(project, segment)
+            if row.grid_cell is not None or has_grid or has_manual:
+                segment = next(
+                    (
+                        s
+                        for s in self._active_segments(project.project_id)[1]
+                        if s.segment_key == row.segment_key
+                    ),
+                    None,
+                )
+                if segment is not None:
+                    self._sync_storyboard_grid(project, segment)
         return CommandResult(ok=True, frame_image=row)
 
     def cmd_approve_keyframes(self, project, payload) -> CommandResult:
@@ -1870,7 +1915,7 @@ class WorkbenchService:
 
     def _resolve_references(
         self, project, segment, sb_version_id: str
-    ) -> tuple[list[str], VideoMode, str | None, bool]:
+    ) -> tuple[list[str], VideoMode, str | None, bool, int]:
         """参考图解析（COMMAND-001）：关键帧优先 + 每资产一张确定性主图。
 
         段有已批准关键帧 → 它占 <Picture 1>（开场锚点，尾帧接力让位，TASK-031），
@@ -1878,13 +1923,16 @@ class WorkbenchService:
         身份锚：角色优先「主设定」、场景优先「空镜」，都没有才取第一张已批准
         图——不取「最新」。顺序即上传顺序，任何重排都会破坏提示词编号。
         多宫格分镜板（T6 锚点口径）优先占 <Picture 1>，is_storyboard 标记
-        锚点是宫格行（供提示词注入宫格声明句，Task7）。
-        返回 (reference_paths, mode, keyframe_path|None, is_storyboard)。
+        锚点是宫格行，storyboard_cells 是宫格实际格数（宫格行 reference_paths
+        的长度，供提示词声明句声明格数，Task7）。
+        返回 (reference_paths, mode, keyframe_path|None, is_storyboard,
+        storyboard_cells)。
         """
         anchor = self._approved_anchor_frame(project.project_id, segment.segment_key)
         is_storyboard = (
             anchor is not None and anchor.view_label == STORYBOARD_GRID_LABEL
         )
+        storyboard_cells = len(anchor.reference_paths) if is_storyboard else 0
         resolved: list[tuple[str, AssetKind, str, str]] = []
         missing: list[str] = []
         for ref in segment.asset_refs:
@@ -1927,7 +1975,7 @@ class WorkbenchService:
             paths = paths[: MAX_REFERENCE_IMAGES - 1]
             keyframe_path = anchor.file_path
             paths = [keyframe_path, *paths]
-        return paths, mode, keyframe_path, is_storyboard
+        return paths, mode, keyframe_path, is_storyboard, storyboard_cells
 
     def _tail_frame_for(self, pid: str, prev_key: str, sb_version_id: str) -> str | None:
 
@@ -1962,9 +2010,13 @@ class WorkbenchService:
         for seg in targets:
             index = keys.index(seg.segment_key)
             prev_key = keys[index - 1] if index > 0 else ""
-            reference_paths, mode, keyframe_path, is_storyboard = self._resolve_references(
-                project, seg, sb.storyboard_version_id
-            )
+            (
+                reference_paths,
+                mode,
+                keyframe_path,
+                is_storyboard,
+                storyboard_cells,
+            ) = self._resolve_references(project, seg, sb.storyboard_version_id)
             # TASK-046 衔接修复：关键帧只作**场景首段**的 <Picture 1>（定开场构图）；
             # 同场景后继段改用**尾帧接力**续接前段的动作、光影与镜头位置——
             # 此前每段都从自己的静帧冷启动（TASK-031 关键帧优先），
@@ -2001,6 +2053,9 @@ class WorkbenchService:
                 seg,
                 opening_frame=bool(keyframe_path) or seg.continuity.enabled,
                 storyboard_reference=bool(keyframe_path) and is_storyboard,
+                storyboard_cell_count=(
+                    storyboard_cells if keyframe_path and is_storyboard else 0
+                ),
             )
             version_no = sb.version_no
             job = Job(
@@ -2030,7 +2085,13 @@ class WorkbenchService:
         return CommandResult(jobs=jobs)
 
     def _compile_production_prompt(
-        self, project, segment, *, opening_frame: bool, storyboard_reference: bool = False
+        self,
+        project,
+        segment,
+        *,
+        opening_frame: bool,
+        storyboard_reference: bool = False,
+        storyboard_cell_count: int = 0,
     ) -> str:
         """生产时实时重编译六段提示词（TASK-032）。
 
@@ -2038,8 +2099,9 @@ class WorkbenchService:
         锚点唯一、定妆卡/空镜短语消毒、开场位置注入）必须对存量分镜即时
         生效，而不是被缓存文本挡住。opening_frame 指明 <Picture 1> 槽位
         来源（关键帧或尾帧接力）。storyboard_reference 指明 <Picture 1>
-        是多宫格分镜板（Task7），提示词注入宫格声明句（镜序/不上画护栏）。
-        守住 7000 字符契约。
+        是多宫格分镜板（Task7）；storyboard_cell_count 是宫格实际格数
+        （拼板格子数），提示词声明句按它声明格数——cell_count<=0 时不
+        注入声明（防御）。守住 7000 字符契约。
 
         TASK-040 人工覆盖：段落被人在页面上改过正文（h3_prompt.manual_override）
         时直接用存储文本，不再重编译——手改的意图优先于编译器升级；清除覆盖标记
@@ -2064,7 +2126,7 @@ class WorkbenchService:
             assets_by_id,
             style_line=project.params.style,
             opening_frame=opening_frame,
-            storyboard_reference=storyboard_reference,
+            storyboard_cells=storyboard_cell_count if storyboard_reference else 0,
         )
         if len(text) > 7000:
             raise DomainError(
@@ -2089,8 +2151,8 @@ class WorkbenchService:
             validate_segment(segment, known_asset_ids={
                 a.asset_id for a in self.ctx.assets.list_assets(project.project_id)
             })
-        reference_paths, mode, keyframe_path, is_storyboard = self._resolve_references(
-            project, segment, sb.storyboard_version_id
+        reference_paths, mode, keyframe_path, is_storyboard, storyboard_cells = (
+            self._resolve_references(project, segment, sb.storyboard_version_id)
         )
         keys = [s.segment_key for s in sb.content.segments]
         index = keys.index(key)
@@ -2115,6 +2177,9 @@ class WorkbenchService:
                 segment,
                 opening_frame=bool(keyframe_path) or segment.continuity.enabled,
                 storyboard_reference=bool(keyframe_path) and is_storyboard,
+                storyboard_cell_count=(
+                    storyboard_cells if keyframe_path and is_storyboard else 0
+                ),
             )
         version_no = len(self.ctx.clips.list_by_project(project.project_id)) + 1
         job = Job(

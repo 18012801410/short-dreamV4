@@ -53,15 +53,25 @@ RELAY_ANCHOR_EN = (
     "happen after this frame."
 )
 
-# 宫格分镜板声明（<Picture 1>=宫格时注入）：官方 R2V 口径——声明视角/站位/镜序，
-# 并加"宫格本身不上画"护栏（防止 H3 把多格布局当成画面内容渲染成分屏）。
-# 与 RELAY_ANCHOR_EN 互斥：宫格口径不叠加单帧锚定，由首格承担开场帧语义。
-STORYBOARD_ANCHOR_EN = (
-    "<Picture 1> is a storyboard reference for the shots of this segment, "
-    "defining the viewpoint, subject placement, and shot order; frame 0 "
-    "must match the first cell of <Picture 1>, and the grid layout of "
-    "<Picture 1> itself never appears on screen."
-)
+
+def _storyboard_anchor(cell_count: int) -> str:
+    """宫格分镜板声明句（<Picture 1>=宫格时按实际格数生成）。
+
+    官方 R2V 口径——声明视角/站位/镜序，并声明**实际格数与镜序**（shots 超出
+    MAX_GRID_CELLS 时只拼了前 6 格，声明"全部 shots"会误导 H3 的镜序理解，
+    设计 §4.1：声明句只声明实际存在的格数），再加"宫格本身不上画"护栏
+    （防止 H3 把多格布局当成画面内容渲染成分屏）。
+    与 RELAY_ANCHOR_EN 互斥：宫格口径不叠加单帧锚定，由首格承担开场帧语义。
+    """
+    cells = ", ".join(f"cell {i}" for i in range(1, cell_count + 1))
+    return (
+        f"<Picture 1> is a storyboard reference of {cell_count} cells for the "
+        "shots of this segment, defining the viewpoint, subject placement, "
+        f"and shot order ({cells} from left to right, top to bottom); "
+        "frame 0 must match the first cell of <Picture 1>, and the grid "
+        "layout of <Picture 1> itself never appears on screen."
+    )
+
 
 # retention_analysis 按参考图类型分化（官方口径：逐图声明"管什么、不管什么"，
 # 避免角色板顺带钉死构图、场景板顺带决定人物长相）
@@ -294,7 +304,7 @@ def compile_h3_prompt(
     scene_summary: str = "",
     style_line: str = "",
     opening_frame: bool | None = None,
-    storyboard_reference: bool = False,
+    storyboard_cells: int = 0,
 ) -> str:
     """从 Segment 结构化数据编译六段式 reference 提示词（英文正文+中文台词）。
 
@@ -302,9 +312,10 @@ def compile_h3_prompt(
     segment.continuity.enabled；关键帧段（TASK-031）在产视频时用
     opening_frame=True 重编译，让非连续段也拥有 Picture 1 槽位且编号不错位。
 
-    storyboard_reference：<Picture 1> 是多宫格分镜板（方案A）时置 True，
-    在 subject_definitions 注入官方 R2V 宫格声明句（视角/站位/镜序 +
-    "宫格本身不上画"护栏）；普通开场帧不注入。
+    storyboard_cells：<Picture 1> 是多宫格分镜板（方案A）时的**实际格数**
+    （拼板格子数，≤MAX_GRID_CELLS）；>0 时在 subject_definitions 注入官方
+    R2V 宫格声明句（实际格数/镜序 + "宫格本身不上画"护栏），retention 行
+    同步声明格数；0（缺省，含防御性非正值）不注入——普通开场帧不注入。
     """
     relay = segment.continuity.enabled if opening_frame is None else opening_frame
     pictures: list[tuple[int, str, Asset | None]] = []
@@ -328,10 +339,10 @@ def compile_h3_prompt(
     # ---- subject_definitions ----
     subj: list[str] = []
     if relay:
-        if storyboard_reference:
+        if storyboard_cells > 0:
             # 宫格分镜板参考：官方 R2V 口径不叠加单帧锚定，
-            # 换成"首格定开场、宫格布局不上画"的宫格口径
-            subj.append(STORYBOARD_ANCHOR_EN)
+            # 换成"首格定开场、宫格布局不上画"的宫格口径（声明实际格数）
+            subj.append(_storyboard_anchor(storyboard_cells))
         else:
             subj.append(RELAY_ANCHOR_EN)
     for pic_no, _, asset in pictures:
@@ -385,12 +396,12 @@ def compile_h3_prompt(
     # ---- retention_analysis ----
     ret: list[str] = []
     if relay:
-        if storyboard_reference:
+        if storyboard_cells > 0:
             ret.append(
-                "<Picture 1> (appears in [Shot 1]): fully_preserved - frame 0 "
-                "opens on the first cell of <Picture 1>, the shot order "
-                "follows the remaining cells, and the grid layout itself "
-                "never appears on screen."
+                f"<Picture 1> (appears in [Shot 1]): fully_preserved - frame 0 "
+                f"opens on the first cell of the {storyboard_cells}-cell "
+                "storyboard, the shot order follows the remaining cells, and "
+                "the grid layout itself never appears on screen."
             )
         else:
             ret.append(

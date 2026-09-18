@@ -739,13 +739,16 @@ def _storyboard_segment() -> "Segment":
 
 
 def test_h3_storyboard_sentence_injected() -> None:
-    """storyboard_reference=True 时注入宫格声明：首格定开场+防入画护栏。"""
+    """storyboard_cells>0 时注入宫格声明：实际格数/镜序+首格定开场+防入画护栏。"""
     from server.app.h3_compiler import compile_h3_prompt
 
-    prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True, storyboard_reference=True)
-    assert "storyboard reference" in prompt
+    prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True, storyboard_cells=2)
+    assert "storyboard reference of 2 cells" in prompt
+    assert "cell 1, cell 2" in prompt
     assert "never appears on screen" in prompt
-    # 宫格口径由 STORYBOARD_ANCHOR_EN 承担开场帧语义（不再叠加 RELAY 单帧锚定）
+    # retention 行同步声明实际格数
+    assert "opens on the first cell of the 2-cell storyboard" in prompt
+    # 宫格口径由 _storyboard_anchor 承担开场帧语义（不再叠加 RELAY 单帧锚定）
     assert "frame 0 must match the first cell" in prompt
 
 
@@ -753,16 +756,19 @@ def test_h3_storyboard_excludes_relay_anchor() -> None:
     """互斥：宫格分镜板参考不注入 RELAY_ANCHOR_EN 的单帧锚定句。"""
     from server.app.h3_compiler import compile_h3_prompt
 
-    prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True, storyboard_reference=True)
+    prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True, storyboard_cells=2)
     assert "exact opening frame" not in prompt
     assert "the action starts from this frame" not in prompt
 
 
 def test_h3_no_storyboard_sentence_by_default() -> None:
-    """缺省不注入宫格声明句（仅 <Picture 1> 是宫格时由调用方传参启用）。"""
+    """缺省（或防御性 cell_count<=0）不注入宫格声明句。"""
     from server.app.h3_compiler import compile_h3_prompt
 
     prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True)
+    assert "storyboard reference" not in prompt
+    # 防御：cell_count<=0（如宫格行 reference_paths 异常为空）不注入
+    prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True, storyboard_cells=0)
     assert "storyboard reference" not in prompt
 
 
@@ -1214,30 +1220,32 @@ def _relay_second_segment() -> "Segment":
 
 
 def test_resolve_references_prefers_grid(tmp_path) -> None:
-    """段有已批准宫格 → Picture 1 = 宫格路径，第 4 位 is_storyboard=True。"""
+    """段有已批准宫格 → Picture 1 = 宫格路径，is_storyboard=True 且带实际格数。"""
     svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
     c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1, approved=False)
     c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=2, approved=False)
     svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c1.frame_image_id})
     svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
-    paths, _mode, keyframe_path, is_storyboard = svc._resolve_references(
+    paths, _mode, keyframe_path, is_storyboard, storyboard_cells = svc._resolve_references(
         svc.get_project(pid), _first_grid_segment(svc, pid), "sbv-grid"
     )
     assert is_storyboard is True
+    assert storyboard_cells == 2
     assert paths[0] == keyframe_path
     assert "storyboards/" in paths[0]
 
 
 def test_production_prompt_contains_storyboard_sentence(tmp_path) -> None:
-    """产视频提示词：宫格声明句（视角/站位/镜序 + 宫格不上画护栏）注入。"""
+    """产视频提示词：宫格声明句按实际格数声明（2 格段 → "2 cells"）。"""
     svc, _ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
     prompt = svc._compile_production_prompt(
         svc.get_project(pid),
         _first_grid_segment(svc, pid),
         opening_frame=True,
         storyboard_reference=True,
+        storyboard_cell_count=2,
     )
-    assert "storyboard reference" in prompt
+    assert "storyboard reference of 2 cells" in prompt
     assert "never appears on screen" in prompt
 
 
@@ -1287,6 +1295,80 @@ def test_relay_segment_grid_yields_to_tail_frame(tmp_path) -> None:
     assert relay["opening_frame_source"] == "tail_frame"
     assert relay["continuity_prev_segment_key"] == "S01G01"
     assert relay["reference_paths"] == [f"{pid}/assets/a-lead.png"]
-    # 宫格声明互斥：接力段绝不注入宫格声明；首段宫格声明已注入
+    # 宫格声明互斥：接力段绝不注入宫格声明；首段宫格声明已注入且声明实际格数
     assert "storyboard reference" not in relay["prompt"]
-    assert "storyboard reference" in head["prompt"]
+    assert "storyboard reference of 2 cells" in head["prompt"]
+
+
+def _add_manual_frame_row(ctx, pid: str, key: str, *, version_no: int,
+                          approved: bool = False):
+    """造一张无格号手动覆盖行（已落盘真图，模拟前端整段上传/重抽，无 cell_no）。"""
+    from PIL import Image
+
+    from server.app.media import abs_media_path
+    from server.domain.entities import SegmentFrameImage
+    from server.domain.enums import AssetImageStatus
+
+    rel = f"{pid}/frames/{key}_manual_v{version_no}.png"
+    dest = abs_media_path(ctx.settings, rel)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (160, 90), (10, 10, 10)).save(dest)
+    row = SegmentFrameImage(
+        frame_image_id=f"frm-manual-v{version_no}",
+        project_id=pid,
+        segment_key=key,
+        version_no=version_no,
+        view_label="上传",
+        provider="upload",
+        file_path=rel,
+        status=AssetImageStatus.UPLOADED,
+        approved=approved,
+    )
+    ctx.frames.add(row)
+    return row
+
+
+def test_manual_row_approval_supersedes_grid(tmp_path) -> None:
+    """手动覆盖行（无格号）批准 → 宫格作废且不重拼（手动图优先占 Picture 1，
+    设计 §5）；锚点回退手动行而非旧宫格（旧宫格不得遮蔽手动覆盖图）。"""
+    from server.domain.entities import STORYBOARD_GRID_LABEL
+
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1, approved=False)
+    c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=2, approved=False)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c1.frame_image_id})
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
+    assert any(
+        r.view_label == STORYBOARD_GRID_LABEL
+        for r in ctx.frames.list_by_segment(pid, "S01G01")
+    )
+    # 用户整段上传（无 cell_no）并批准 → 宫格让位
+    manual = _add_manual_frame_row(ctx, pid, "S01G01", version_no=4)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": manual.frame_image_id})
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    assert all(r.view_label != STORYBOARD_GRID_LABEL for r in rows)
+    anchor = svc._approved_anchor_frame(pid, "S01G01")
+    assert anchor is not None and anchor.frame_image_id == manual.frame_image_id
+
+
+def test_manual_row_delete_restores_grid(tmp_path) -> None:
+    """手动覆盖行删除 → 重新同步 → 全格仍就绪且无覆盖 → 宫格恢复重拼。"""
+    from server.domain.entities import STORYBOARD_GRID_LABEL
+
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1, approved=False)
+    c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=2, approved=False)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c1.frame_image_id})
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
+    manual = _add_manual_frame_row(ctx, pid, "S01G01", version_no=4)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": manual.frame_image_id})
+    assert all(
+        r.view_label != STORYBOARD_GRID_LABEL
+        for r in ctx.frames.list_by_segment(pid, "S01G01")
+    )
+    svc.dispatch(pid, "delete_frame_image", {"frame_image_id": manual.frame_image_id})
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    grids = [r for r in rows if r.view_label == STORYBOARD_GRID_LABEL]
+    assert len(grids) == 1
+    anchor = svc._approved_anchor_frame(pid, "S01G01")
+    assert anchor is not None and anchor.frame_image_id == grids[0].frame_image_id
