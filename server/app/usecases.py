@@ -1870,16 +1870,21 @@ class WorkbenchService:
 
     def _resolve_references(
         self, project, segment, sb_version_id: str
-    ) -> tuple[list[str], VideoMode, str | None]:
+    ) -> tuple[list[str], VideoMode, str | None, bool]:
         """参考图解析（COMMAND-001）：关键帧优先 + 每资产一张确定性主图。
 
         段有已批准关键帧 → 它占 <Picture 1>（开场锚点，尾帧接力让位，TASK-031），
         资产图顺延；>9 截断时关键帧槽位保留、只截资产图。主图选择决定资产
         身份锚：角色优先「主设定」、场景优先「空镜」，都没有才取第一张已批准
         图——不取「最新」。顺序即上传顺序，任何重排都会破坏提示词编号。
-        返回 (reference_paths, mode, keyframe_path|None)。
+        多宫格分镜板（T6 锚点口径）优先占 <Picture 1>，is_storyboard 标记
+        锚点是宫格行（供提示词注入宫格声明句，Task7）。
+        返回 (reference_paths, mode, keyframe_path|None, is_storyboard)。
         """
-        keyframe = self._approved_anchor_frame(project.project_id, segment.segment_key)
+        anchor = self._approved_anchor_frame(project.project_id, segment.segment_key)
+        is_storyboard = (
+            anchor is not None and anchor.view_label == STORYBOARD_GRID_LABEL
+        )
         resolved: list[tuple[str, AssetKind, str, str]] = []
         missing: list[str] = []
         for ref in segment.asset_refs:
@@ -1902,7 +1907,7 @@ class WorkbenchService:
             )
         mode = (
             VideoMode.R2VA
-            if (resolved or keyframe is not None)
+            if (resolved or anchor is not None)
             else VideoMode.T2VA
         )
         from server.domain.entities import ResolvedReference
@@ -1916,13 +1921,13 @@ class WorkbenchService:
         kept, _warnings = truncate_references(refs)
         paths = [r.file_path for r in kept]
         keyframe_path: str | None = None
-        if keyframe is not None:
+        if anchor is not None:
             from server.domain.validation import MAX_REFERENCE_IMAGES
 
             paths = paths[: MAX_REFERENCE_IMAGES - 1]
-            keyframe_path = keyframe.file_path
+            keyframe_path = anchor.file_path
             paths = [keyframe_path, *paths]
-        return paths, mode, keyframe_path
+        return paths, mode, keyframe_path, is_storyboard
 
     def _tail_frame_for(self, pid: str, prev_key: str, sb_version_id: str) -> str | None:
 
@@ -1957,7 +1962,7 @@ class WorkbenchService:
         for seg in targets:
             index = keys.index(seg.segment_key)
             prev_key = keys[index - 1] if index > 0 else ""
-            reference_paths, mode, keyframe_path = self._resolve_references(
+            reference_paths, mode, keyframe_path, is_storyboard = self._resolve_references(
                 project, seg, sb.storyboard_version_id
             )
             # TASK-046 衔接修复：关键帧只作**场景首段**的 <Picture 1>（定开场构图）；
@@ -1995,6 +2000,7 @@ class WorkbenchService:
                 project,
                 seg,
                 opening_frame=bool(keyframe_path) or seg.continuity.enabled,
+                storyboard_reference=bool(keyframe_path) and is_storyboard,
             )
             version_no = sb.version_no
             job = Job(
@@ -2024,14 +2030,16 @@ class WorkbenchService:
         return CommandResult(jobs=jobs)
 
     def _compile_production_prompt(
-        self, project, segment, *, opening_frame: bool
+        self, project, segment, *, opening_frame: bool, storyboard_reference: bool = False
     ) -> str:
         """生产时实时重编译六段提示词（TASK-032）。
 
         存储的 h3_prompt.text 只是分镜生成时的编译缓存；编译器升级（身份
         锚点唯一、定妆卡/空镜短语消毒、开场位置注入）必须对存量分镜即时
         生效，而不是被缓存文本挡住。opening_frame 指明 <Picture 1> 槽位
-        来源（关键帧或尾帧接力）。守住 7000 字符契约。
+        来源（关键帧或尾帧接力）。storyboard_reference 指明 <Picture 1>
+        是多宫格分镜板（Task7），提示词注入宫格声明句（镜序/不上画护栏）。
+        守住 7000 字符契约。
 
         TASK-040 人工覆盖：段落被人在页面上改过正文（h3_prompt.manual_override）
         时直接用存储文本，不再重编译——手改的意图优先于编译器升级；清除覆盖标记
@@ -2056,6 +2064,7 @@ class WorkbenchService:
             assets_by_id,
             style_line=project.params.style,
             opening_frame=opening_frame,
+            storyboard_reference=storyboard_reference,
         )
         if len(text) > 7000:
             raise DomainError(
@@ -2080,7 +2089,7 @@ class WorkbenchService:
             validate_segment(segment, known_asset_ids={
                 a.asset_id for a in self.ctx.assets.list_assets(project.project_id)
             })
-        reference_paths, mode, keyframe_path = self._resolve_references(
+        reference_paths, mode, keyframe_path, is_storyboard = self._resolve_references(
             project, segment, sb.storyboard_version_id
         )
         keys = [s.segment_key for s in sb.content.segments]
@@ -2105,6 +2114,7 @@ class WorkbenchService:
                 project,
                 segment,
                 opening_frame=bool(keyframe_path) or segment.continuity.enabled,
+                storyboard_reference=bool(keyframe_path) and is_storyboard,
             )
         version_no = len(self.ctx.clips.list_by_project(project.project_id)) + 1
         job = Job(

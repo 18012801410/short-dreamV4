@@ -1170,3 +1170,109 @@ def test_anchor_prefers_grid_over_cells(tmp_path) -> None:
     )
     anchor = svc._approved_anchor_frame(pid, "S01G01")
     assert anchor is not None and anchor.frame_image_id == "frm-grid"
+
+
+# --------------------------------------------------------------------------
+# 多宫格分镜板 Task7：视频侧接线（宫格占 <Picture 1> + 声明句透传）
+# --------------------------------------------------------------------------
+
+
+def _relay_second_segment() -> "Segment":
+    """同场景后继段夹具（S01G02）：2-shot 可拼宫格，continuity 接力 S01G01，
+    带一个角色 asset_ref——让"宫格让位"断言非空（参考图剥掉宫格后剩资产图）。"""
+    from server.domain.entities import Continuity, H3Prompt, Segment, Shot
+
+    return Segment(
+        segment_key="S01G02",
+        scene_id="S1",
+        index=2,
+        duration_sec=10,
+        shots=[
+            Shot(shot_no=1, cutpoint_sec=4.0, camera="wide",
+                 description="on the river",
+                 action="the old ferryman rows away from the pier"),
+            Shot(shot_no=2, cutpoint_sec=10.0, camera="close",
+                 description="looks back",
+                 action="the old ferryman looks back at the shrinking pier"),
+        ],
+        asset_refs=[{"asset_id": "a-lead", "usage_note": "主角参考"}],
+        continuity=Continuity(enabled=True, with_prev_segment_key="S01G01"),
+        keyframe_description="",
+        h3_prompt=H3Prompt(text=""),
+    )
+
+
+def test_resolve_references_prefers_grid(tmp_path) -> None:
+    """段有已批准宫格 → Picture 1 = 宫格路径，第 4 位 is_storyboard=True。"""
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1, approved=False)
+    c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=2, approved=False)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c1.frame_image_id})
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
+    paths, _mode, keyframe_path, is_storyboard = svc._resolve_references(
+        svc.get_project(pid), _first_grid_segment(svc, pid), "sbv-grid"
+    )
+    assert is_storyboard is True
+    assert paths[0] == keyframe_path
+    assert "storyboards/" in paths[0]
+
+
+def test_production_prompt_contains_storyboard_sentence(tmp_path) -> None:
+    """产视频提示词：宫格声明句（视角/站位/镜序 + 宫格不上画护栏）注入。"""
+    svc, _ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    prompt = svc._compile_production_prompt(
+        svc.get_project(pid),
+        _first_grid_segment(svc, pid),
+        opening_frame=True,
+        storyboard_reference=True,
+    )
+    assert "storyboard reference" in prompt
+    assert "never appears on screen" in prompt
+
+
+def test_relay_segment_grid_yields_to_tail_frame(tmp_path) -> None:
+    """同场景后继段（尾帧接力）→ 宫格让位：Picture 1 留给运行时尾帧，
+    参考图不含本段宫格（与现有关键帧让位机制等价，TASK-046）。"""
+    from server.domain.entities import Asset, AssetImage, JobType
+    from server.domain.enums import AssetImageStatus, AssetKind
+    from server.domain.project import apply_action
+
+    svc, ctx, pid = _grid_enqueue_fixture(
+        tmp_path, [_two_shot_grid_segment(), _relay_second_segment()],
+        through_keyframes=True,
+    )
+    ctx.assets.add_asset(
+        Asset(asset_id="a-lead", project_id=pid, kind=AssetKind.CHARACTER,
+              name="老船工", visual_anchor="灰白山羊胡、深色油皮外套")
+    )
+    ctx.assets.add_image(
+        AssetImage(asset_image_id="img-a-lead", asset_id="a-lead", version_no=1,
+                   view_label="主设定", file_path=f"{pid}/assets/a-lead.png",
+                   status=AssetImageStatus.READY, approved=True)
+    )
+    # 两段各 2 格；version_no 加偏移避免 _grid_sync_add_cell 的 row id 跨段撞车
+    for offset, key in enumerate(("S01G01", "S01G02")):
+        c1 = _grid_sync_add_cell(
+            ctx, pid, key, cell_no=1, version_no=offset * 2 + 1, approved=False
+        )
+        c2 = _grid_sync_add_cell(
+            ctx, pid, key, cell_no=2, version_no=offset * 2 + 2, approved=False
+        )
+        svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c1.frame_image_id})
+        svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
+    moved = apply_action(ctx.projects.get(pid), "keyframes_generated")
+    ctx.projects.save(moved)
+    svc.dispatch(pid, "approve_keyframes", {})
+    svc.dispatch(pid, "produce_video", {"scope": "all"})
+
+    video_jobs = [j for j in ctx.jobs.list_all() if j.type is JobType.VIDEO_GEN]
+    assert len(video_jobs) == 2
+    by_key = {j.input_snapshot["segment_key"]: j.input_snapshot for j in video_jobs}
+    head, relay = by_key["S01G01"], by_key["S01G02"]
+    # 场景首段：宫格占 <Picture 1>（开场锚点）
+    assert head["opening_frame_source"] == "keyframe"
+    assert "storyboards/" in head["reference_paths"][0]
+    # 同场景后继段：尾帧接力，宫格让位——参考图剥掉宫格后只剩资产图
+    assert relay["opening_frame_source"] == "tail_frame"
+    assert relay["continuity_prev_segment_key"] == "S01G01"
+    assert relay["reference_paths"] == [f"{pid}/assets/a-lead.png"]
