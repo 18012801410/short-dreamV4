@@ -1581,17 +1581,21 @@ class WorkbenchService:
         格子跳过。未就绪则不留半成品宫格。单镜段（旧口径无格号）不拼宫格。
 
         手动覆盖让位（设计 §5"手动图优先占 Picture 1"）：段内存在已批准的
-        无格号行、且其版本比所有格子行都新（用户在格子之后整段上传/重抽）
-        时，宫格只作废不重拼——否则刚作废的宫格会立即用同样的格子拼回来，
-        把用户手动批准的图重新遮住。之后格子行再变化（重抽某格并批准）时
-        该行不再比格子新，宫格恢复重拼（最后操作赢）。
+        无格号行、且其版本比所有已批准格子行都新（用户在格子之后整段上传/
+        重抽）时，宫格只作废不重拼——否则刚作废的宫格会立即用同样的格子
+        拼回来，把用户手动批准的图重新遮住。cell_vers 只收已批准格子行：
+        让位比较的是"已批准的手动图 vs 已批准的格子图"，重抽产生的未批准
+        新版本不得压过已批准手动行触发遮蔽。之后格子行再变化（重抽某格
+        并批准）时该行不再比格子新，宫格恢复重拼（最后操作赢）。
         """
         from PIL import Image
 
         pid = project.project_id
         key = segment.segment_key
         rows = self.ctx.frames.list_by_segment(pid, key)
-        cell_vers = [r.version_no for r in rows if r.grid_cell is not None]
+        cell_vers = [
+            r.version_no for r in rows if r.grid_cell is not None and r.approved
+        ]
         manual_supersedes = any(
             r.grid_cell is None
             and r.approved
@@ -1812,34 +1816,17 @@ class WorkbenchService:
     def cmd_delete_frame_image(self, project, payload) -> CommandResult:
         """删除关键帧（清理旧版本）：只删库行，磁盘文件保留可恢复。
 
-        删的是格子行（grid_cell 非 None）或段内有宫格/已批准手动覆盖行 →
-        删后同步宫格：旧板作废，剩余格仍就绪且无手动覆盖则重拼，否则不留
-        半成品宫格。删除已批准手动覆盖行时全格仍就绪 → 宫格恢复重拼。
-        删宫格行自身不触发（宫格是程序拼的派生物，删格子才会联动重拼）。
+        删除任何非宫格行 → 删后同步宫格：旧板作废，剩余格仍就绪且无手动
+        覆盖则重拼，否则不留半成品宫格（如删除已批准手动覆盖行 → 全格仍
+        就绪 → 宫格恢复重拼）。删宫格行自身不触发（宫格是程序拼的派生物，
+        删格子才会联动重拼）。
         """
         row = self.ctx.frames.get(str(payload.get("frame_image_id", "")))
         if row is None or row.project_id != project.project_id:
             raise DomainError("NOT_FOUND", f"关键帧不存在：{payload.get('frame_image_id')}")
-        # 触发判定用删除前的行集：宫格行排除被删行自身；手动行不排除
-        # （删除已批准手动覆盖行 → 同步时该行已不在 → 宫格恢复重拼）
-        rows = self.ctx.frames.list_by_segment(row.project_id, row.segment_key)
-        was_cell = row.grid_cell is not None
-        has_grid = any(
-            i.view_label == STORYBOARD_GRID_LABEL
-            and i.frame_image_id != row.frame_image_id
-            for i in rows
-        )
-        has_manual = any(
-            i.grid_cell is None
-            and i.approved
-            and i.view_label != STORYBOARD_GRID_LABEL
-            for i in rows
-        )
         seg_key = row.segment_key
         self.ctx.frames.delete(row.frame_image_id)
-        if row.view_label != STORYBOARD_GRID_LABEL and (
-            was_cell or has_grid or has_manual
-        ):
+        if row.view_label != STORYBOARD_GRID_LABEL:
             segment = next(
                 (
                     s
@@ -1865,29 +1852,21 @@ class WorkbenchService:
         row.approved = approved
         self.ctx.frames.save(row)
         if row.view_label != STORYBOARD_GRID_LABEL:
-            # 无格号行批准同样触发同步：段内有宫格时作废旧板（手动覆盖图
-            # 优先占 Picture 1，设计 §5）；无宫格时由 _sync_storyboard_grid
-            # 按就绪口径决定是否重拼，单镜段在同步函数内直接跳过。
-            # 宫格行自身的批准/取消不触发（宫格是程序拼的派生物，恒批准）。
-            rows = self.ctx.frames.list_by_segment(row.project_id, row.segment_key)
-            has_grid = any(i.view_label == STORYBOARD_GRID_LABEL for i in rows)
-            has_manual = any(
-                i.grid_cell is None
-                and i.approved
-                and i.view_label != STORYBOARD_GRID_LABEL
-                for i in rows
+            # 任何非宫格行的批准/撤销批准都触发同步（宫格行自身的批准/
+            # 取消不触发——宫格是程序拼的派生物，恒批准）。_sync_storyboard_grid
+            # 幂等：先作废旧宫格，再按就绪+让位口径决定是否重拼，批准与撤销
+            # 两个方向都自然收敛——批准手动行 → 让位不重拼；撤销批准手动行 →
+            # 全格仍就绪且无让位 → 宫格恢复重拼。单镜段在同步函数内直接跳过。
+            segment = next(
+                (
+                    s
+                    for s in self._active_segments(project.project_id)[1]
+                    if s.segment_key == row.segment_key
+                ),
+                None,
             )
-            if row.grid_cell is not None or has_grid or has_manual:
-                segment = next(
-                    (
-                        s
-                        for s in self._active_segments(project.project_id)[1]
-                        if s.segment_key == row.segment_key
-                    ),
-                    None,
-                )
-                if segment is not None:
-                    self._sync_storyboard_grid(project, segment)
+            if segment is not None:
+                self._sync_storyboard_grid(project, segment)
         return CommandResult(ok=True, frame_image=row)
 
     def cmd_approve_keyframes(self, project, payload) -> CommandResult:

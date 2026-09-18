@@ -1372,3 +1372,68 @@ def test_manual_row_delete_restores_grid(tmp_path) -> None:
     assert len(grids) == 1
     anchor = svc._approved_anchor_frame(pid, "S01G01")
     assert anchor is not None and anchor.frame_image_id == grids[0].frame_image_id
+
+
+def test_unapprove_manual_row_restores_grid(tmp_path) -> None:
+    """撤销批准手动覆盖行 → 宫格恢复重拼（恰 1 行、锚点为宫格行）。
+
+    回归：撤销后该行已非 approved、宫格此前已被让位作废、手动行无格号，
+    旧的 has_grid/has_manual/grid_cell 三条件触发判定全 False → 同步不触发
+    → 宫格永不恢复；现口径改为"非宫格行批准/撤销批准即触发"。
+    """
+    from server.domain.entities import STORYBOARD_GRID_LABEL
+
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1, approved=False)
+    c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=2, approved=False)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c1.frame_image_id})
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
+    manual = _add_manual_frame_row(ctx, pid, "S01G01", version_no=4)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": manual.frame_image_id})
+    assert all(
+        r.view_label != STORYBOARD_GRID_LABEL
+        for r in ctx.frames.list_by_segment(pid, "S01G01")
+    )
+    # 撤销批准手动行（approved=False 方向）→ 全格仍就绪且无让位 → 宫格恢复
+    svc.dispatch(
+        pid,
+        "approve_frame_image",
+        {"frame_image_id": manual.frame_image_id, "approved": False},
+    )
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    grids = [r for r in rows if r.view_label == STORYBOARD_GRID_LABEL]
+    assert len(grids) == 1
+    anchor = svc._approved_anchor_frame(pid, "S01G01")
+    assert anchor is not None and anchor.frame_image_id == grids[0].frame_image_id
+
+
+def test_unapproved_cell_reroll_does_not_supersede_manual(tmp_path) -> None:
+    """重抽产生未批准格子新版本（版本比已批准手动行新）→ 不得压过手动行
+    触发让位误判；再触发任意 sync 后宫格仍缺席（未批准重抽不能把手动图
+    遮回去），手动行仍是最新批准非宫格行。
+
+    回归：旧口径 cell_vers 收录所有格子行（含未批准），重抽新版本行会抬高
+    让位阈值 → 手动行不再"比所有格子新" → sync 重拼宫格遮蔽手动图。
+    """
+    from server.domain.entities import STORYBOARD_GRID_LABEL
+
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1, approved=False)
+    c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=2, approved=False)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c1.frame_image_id})
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
+    manual = _add_manual_frame_row(ctx, pid, "S01G01", version_no=4)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": manual.frame_image_id})
+    assert all(
+        r.view_label != STORYBOARD_GRID_LABEL
+        for r in ctx.frames.list_by_segment(pid, "S01G01")
+    )
+    # 重抽格子 1 → 未批准新版本行（version_no=5 比手动行 4 新）
+    _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=5, approved=False)
+    # 触发任意 sync：再次"批准"已批准的格子行 2（幂等命令流触发同步）
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    assert all(r.view_label != STORYBOARD_GRID_LABEL for r in rows)
+    # 手动行必须仍是最新批准非宫格行（锚点不被重抽版本抢走）
+    anchor = svc._approved_anchor_frame(pid, "S01G01")
+    assert anchor is not None and anchor.frame_image_id == manual.frame_image_id
