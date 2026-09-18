@@ -49,6 +49,11 @@ def reference_sheet_rel(project_id: str, digest: str, ext: str = ".jpg") -> str:
     return f"{project_id}/refsheets/sheet_{digest}{ext}"
 
 
+def storyboard_rel(project_id: str, segment_key: str, digest: str, ext: str = ".jpg") -> str:
+    """段多宫格分镜板落盘路径（逐格拼图，digest 复用同组结果）。"""
+    return f"{project_id}/storyboards/{segment_key}_grid_{digest}{ext}"
+
+
 def abs_media_path(settings: Settings, rel: str) -> Path:
     return settings.media_dir / rel
 

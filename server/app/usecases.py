@@ -120,6 +120,54 @@ def _compose_reference_sheet(settings, project_id: str, rel_paths: list[str]) ->
     return rel
 
 
+def _compose_storyboard_grid(
+    settings, project_id: str, segment_key: str, cell_rel_paths: list[str]
+) -> str:
+    """把该段已批准的格子拼成多宫格分镜板，落盘 media 目录并返回相对路径（方案A）。
+
+    布局：storyboard_grid_cols 列、按格号顺序排布、白底 12px 分隔、每行居中。
+    格子由同尺寸生图产出（size_for_asset_card），天然对齐；防御性等比缩放。
+    文件名取格路径摘要：同组格子复用同一张宫格，重复同步不重复落盘。
+    """
+    import hashlib
+
+    from PIL import Image
+
+    from server.app.media import storyboard_rel
+
+    digest = hashlib.md5("\n".join(cell_rel_paths).encode("utf-8")).hexdigest()[:16]
+    rel = storyboard_rel(project_id, segment_key, digest)
+    dest = abs_media_path(settings, rel)
+    if dest.exists():
+        return rel
+    images = []
+    for p in cell_rel_paths:
+        with Image.open(abs_media_path(settings, p)) as im:
+            images.append(im.convert("RGB"))
+    cols = max(1, int(getattr(settings, "storyboard_grid_cols", 3)))
+    cell_h = min(im.height for im in images)
+    scaled = [
+        im.resize((max(1, round(im.width * cell_h / im.height)), cell_h))
+        for im in images
+    ]
+    gap = 12
+    rows = [scaled[i : i + cols] for i in range(0, len(scaled), cols)]
+    row_widths = [sum(im.width for im in row) + gap * (len(row) - 1) for row in rows]
+    width = max(row_widths)
+    height = len(rows) * cell_h + gap * (len(rows) - 1)
+    canvas = Image.new("RGB", (width, height), (255, 255, 255))
+    y = 0
+    for row, row_w in zip(rows, row_widths):
+        x = (width - row_w) // 2
+        for im in row:
+            canvas.paste(im, (x, y))
+            x += im.width + gap
+        y += cell_h + gap
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(dest, quality=92)
+    return rel
+
+
 _PRIMARY_LABEL_HINTS = ("主设定", "空镜")
 
 

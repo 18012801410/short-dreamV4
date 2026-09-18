@@ -753,3 +753,71 @@ def test_h3_no_storyboard_sentence_by_default() -> None:
 
     prompt = compile_h3_prompt(_storyboard_segment(), {}, opening_frame=True)
     assert "storyboard reference" not in prompt
+
+
+# --------------------------------------------------------------------------
+# 多宫格分镜板 Task4：PIL 宫格拼图 _compose_storyboard_grid
+# --------------------------------------------------------------------------
+
+
+def _make_grid_settings(tmp_path):
+    """与既有用例同款夹具：tmp 数据目录 + media 目录（格子图/宫格都落真实数据目录）。"""
+    from server.infra.config import Settings
+
+    settings = Settings(data_dir=tmp_path, _env_file=None)
+    settings.media_dir.mkdir(parents=True, exist_ok=True)
+    return settings
+
+
+def _make_grid_cells(settings, count: int = 4) -> list[str]:
+    """造 count 张 160x90 纯色格图写入 media 目录，返回相对路径列表。"""
+    from PIL import Image
+
+    rels = []
+    for i in range(count):
+        rel = f"p1/cells/cell{i}.png"
+        dest = settings.media_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (160, 90), (i * 40, 0, 0)).save(dest)
+        rels.append(rel)
+    return rels
+
+
+def test_grid_layout_three_cols(tmp_path) -> None:
+    """4 张 16:9 格子 → 3 列 2 行白底宫格：宽=3*160+2*12=504，高=2*90+12=192。"""
+    from PIL import Image
+
+    from server.app.media import abs_media_path
+    from server.app.usecases import _compose_storyboard_grid
+
+    settings = _make_grid_settings(tmp_path)
+    cell_paths = _make_grid_cells(settings)
+
+    rel = _compose_storyboard_grid(settings, "p1", "S01G01", cell_paths)
+
+    assert "storyboards/" in rel
+    assert "S01G01" in rel
+    img = Image.open(abs_media_path(settings, rel))
+    assert img.size == (504, 192)
+
+
+def test_grid_reuse_same_digest(tmp_path) -> None:
+    """同组格子两次拼图：返回同一 rel，第二次命中 digest 不重复落盘。"""
+    from server.app.media import abs_media_path
+    from server.app.usecases import _compose_storyboard_grid
+
+    settings = _make_grid_settings(tmp_path)
+    cell_paths = _make_grid_cells(settings)
+
+    rel1 = _compose_storyboard_grid(settings, "p1", "S01G01", cell_paths)
+    dest = abs_media_path(settings, rel1)
+    stat_before = dest.stat()
+
+    rel2 = _compose_storyboard_grid(settings, "p1", "S01G01", cell_paths)
+
+    assert rel1 == rel2
+    stat_after = dest.stat()
+    assert (stat_after.st_mtime_ns, stat_after.st_size) == (
+        stat_before.st_mtime_ns,
+        stat_before.st_size,
+    )

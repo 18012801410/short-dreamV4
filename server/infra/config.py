@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 0  # 0=不传，由供应商用默认值；DeepSeek 建议 8192
     llm_timeout_sec: int = 120  # 结构化长输出（尤其推理模型）需放大
     h3_reference_video: bool = False  # 视频续接：referenceVideo 槽位语义待官方确认，默认关闭
+    # 多宫格分镜板列数（方案A：逐格生成 + 程序拼宫格）
+    storyboard_grid_cols: int = 3
 
     data_dir: Path = PROJECT_ROOT / "data"
     ffmpeg_path: str = "ffmpeg"
