@@ -1051,3 +1051,122 @@ def test_cell_no_zero_raises(tmp_path) -> None:
                      {"segment_key": "S01G01", "cell_no": 0})
     assert exc_info.value.code == "INVALID_CELL_NO"
     assert ctx.frames.list_by_segment(pid, "S01G01") == []
+
+
+# 多宫格分镜板 Task6：宫格同步 _sync_storyboard_grid + 锚点选择 _approved_anchor_frame
+
+
+def _grid_sync_add_cell(ctx, pid: str, key: str, *, cell_no: int, version_no: int,
+                        approved: bool = True):
+    """造一张已落盘的格子行（PIL 真图写 media，字段口径同 T5 上传路径）。
+
+    file_path 必须指向真实存在的图：同步函数会跳过未落盘的格子。
+    """
+    from PIL import Image
+
+    from server.app.media import abs_media_path
+    from server.domain.entities import SegmentFrameImage
+    from server.domain.enums import AssetImageStatus
+
+    rel = f"{pid}/frames/{key}_cell{cell_no}_v{version_no}.png"
+    dest = abs_media_path(ctx.settings, rel)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (160, 90), (cell_no * 40, 0, 0)).save(dest)
+    row = SegmentFrameImage(
+        frame_image_id=f"frm-cell{cell_no}v{version_no}",
+        project_id=pid,
+        segment_key=key,
+        version_no=version_no,
+        grid_cell=cell_no,
+        provider="upload",
+        file_path=rel,
+        status=AssetImageStatus.UPLOADED,
+        approved=approved,
+    )
+    ctx.frames.add(row)
+    return row
+
+
+def _first_grid_segment(svc, pid: str):
+    """active 分镜的第一段（S01G01）。"""
+    return next(
+        s for s in svc._active_segments(pid)[1] if s.segment_key == "S01G01"
+    )
+
+
+def test_all_cells_approved_composes_grid_row(tmp_path) -> None:
+    """2 格全批准（approve 命令流）→ 段内出现 view_label="分镜板" 的 approved 行，
+    file_path 落盘 storyboards/，reference_paths 按格号 1..2 排序，锚点取宫格。"""
+    from server.app.media import abs_media_path
+    from server.domain.entities import STORYBOARD_GRID_LABEL
+
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1, approved=False)
+    c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=2, approved=False)
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c1.frame_image_id})
+    svc.dispatch(pid, "approve_frame_image", {"frame_image_id": c2.frame_image_id})
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    grids = [r for r in rows if r.view_label == STORYBOARD_GRID_LABEL]
+    assert len(grids) == 1
+    grid = grids[0]
+    assert grid.approved is True
+    assert "storyboards/" in grid.file_path
+    assert grid.reference_paths == [c1.file_path, c2.file_path]
+    assert abs_media_path(ctx.settings, grid.file_path).exists()
+    anchor = svc._approved_anchor_frame(pid, "S01G01")
+    assert anchor is not None and anchor.frame_image_id == grid.frame_image_id
+
+
+def test_partial_approved_no_grid(tmp_path) -> None:
+    """只批 1/2 格 → 无宫格行；_sync_storyboard_grid 返回 None。"""
+    from server.domain.entities import STORYBOARD_GRID_LABEL
+
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1)
+    segment = _first_grid_segment(svc, pid)
+    assert svc._sync_storyboard_grid(svc.get_project(pid), segment) is None
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    assert all(r.view_label != STORYBOARD_GRID_LABEL for r in rows)
+
+
+def test_delete_cell_recomputes(tmp_path) -> None:
+    """删格走 cmd_delete_frame_image → 宫格行被作废
+    （删后只剩 1 格，不满足就绪条件 → 无宫格行）。"""
+    from server.domain.entities import STORYBOARD_GRID_LABEL
+
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1)
+    c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=2)
+    segment = _first_grid_segment(svc, pid)
+    grid = svc._sync_storyboard_grid(svc.get_project(pid), segment)
+    assert grid is not None
+    svc.dispatch(pid, "delete_frame_image", {"frame_image_id": c2.frame_image_id})
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    assert all(r.view_label != STORYBOARD_GRID_LABEL for r in rows)
+    assert not any(r.frame_image_id == c2.frame_image_id for r in rows)
+    assert any(r.frame_image_id == c1.frame_image_id for r in rows)
+
+
+def test_anchor_prefers_grid_over_cells(tmp_path) -> None:
+    """锚点确定性：有宫格行返回宫格（即便版本更低）；只有格子行返回最高版本
+    格子行；无批准行返回 None。"""
+    from server.domain.entities import STORYBOARD_GRID_LABEL, SegmentFrameImage
+    from server.domain.enums import AssetImageStatus
+
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    assert svc._approved_anchor_frame(pid, "S01G01") is None
+    c1 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=1, version_no=1)
+    c2 = _grid_sync_add_cell(ctx, pid, "S01G01", cell_no=2, version_no=3)
+    anchor = svc._approved_anchor_frame(pid, "S01G01")
+    assert anchor is not None and anchor.frame_image_id == c2.frame_image_id
+    ctx.frames.add(
+        SegmentFrameImage(
+            frame_image_id="frm-grid", project_id=pid, segment_key="S01G01",
+            version_no=2, view_label=STORYBOARD_GRID_LABEL,
+            prompt="storyboard grid", provider="pillow",
+            file_path=f"{pid}/storyboards/S01G01_grid_old.jpg",
+            status=AssetImageStatus.READY, approved=True,
+        )
+    )
+    anchor = svc._approved_anchor_frame(pid, "S01G01")
+    assert anchor is not None and anchor.frame_image_id == "frm-grid"

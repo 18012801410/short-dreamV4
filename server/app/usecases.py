@@ -1188,7 +1188,7 @@ class WorkbenchService:
         previews: dict[str, dict] = {}
         for seg in sb_version.content.segments:
             pictures: list[dict] = []
-            keyframe = self._approved_keyframe(project.project_id, seg.segment_key)
+            keyframe = self._approved_anchor_frame(project.project_id, seg.segment_key)
             if keyframe is not None:
                 # 关键帧优先（TASK-031）：占 <Picture 1>，尾帧接力让位
                 pictures.append({
@@ -1403,13 +1403,20 @@ class WorkbenchService:
             raise DomainError("NOT_FOUND", "缺少 active 分镜")
         return sb, list(sb.content.segments)
 
-    def _approved_keyframe(self, pid: str, segment_key: str) -> SegmentFrameImage | None:
-        """该段已批准关键帧（确定性取最高批准版本，不随生成顺序漂移）。"""
+    def _approved_anchor_frame(self, pid: str, segment_key: str) -> SegmentFrameImage | None:
+        """该段的已批准开场锚点（确定性）。
+
+        优先宫格分镜板行（view_label=分镜板，取最高版本）；无宫格时取最高
+        版本的已批准行（存量单张关键帧/格子行回退）。
+        """
         approved = [
             i for i in self.ctx.frames.list_by_segment(pid, segment_key) if i.approved
         ]
         if not approved:
             return None
+        grids = [i for i in approved if i.view_label == STORYBOARD_GRID_LABEL]
+        if grids:
+            return max(grids, key=lambda i: i.version_no)
         return max(approved, key=lambda i: i.version_no)
 
     def _segment_reference_cards(self, pid: str, segment) -> list[str]:
@@ -1565,6 +1572,61 @@ class WorkbenchService:
         for row in self.ctx.frames.list_by_segment(pid, key):
             if row.view_label == STORYBOARD_GRID_LABEL:
                 self.ctx.frames.delete(row.frame_image_id)
+
+    def _sync_storyboard_grid(self, project, segment) -> SegmentFrameImage | None:
+        """格子批准状态变化后同步宫格：作废旧行，全部格就绪时重拼。
+
+        就绪口径：1..min(len(shots), MAX_GRID_CELLS) 每格至少一张已批准且
+        已落盘、可被 PIL 识别的行（同格多版本取最新批准），缺失/假字节的
+        格子跳过。未就绪则不留半成品宫格。单镜段（旧口径无格号）不拼宫格。
+        """
+        from PIL import Image
+
+        pid = project.project_id
+        key = segment.segment_key
+        self._invalidate_storyboard_grid(pid, key)
+        if len(segment.shots) <= 1:
+            return None
+        expected = min(len(segment.shots), MAX_GRID_CELLS)
+        latest: dict[int, SegmentFrameImage] = {}
+        for row in self.ctx.frames.list_by_segment(pid, key):
+            if row.grid_cell is None or not row.approved:
+                continue
+            if not (1 <= row.grid_cell <= expected):
+                continue
+            if not row.file_path:
+                continue
+            abs_p = abs_media_path(self.ctx.settings, row.file_path)
+            if not abs_p.exists():
+                continue
+            try:
+                with Image.open(abs_p):
+                    pass
+            except Exception:
+                # 文件存在但不是合法图片（假字节/损坏）→ 等同未落盘，跳过该格
+                continue
+            if row.grid_cell not in latest or row.version_no > latest[row.grid_cell].version_no:
+                latest[row.grid_cell] = row
+        if len(latest) < expected:
+            return None
+        cell_paths = [latest[i].file_path for i in range(1, expected + 1)]
+        rel = _compose_storyboard_grid(self.ctx.settings, pid, key, cell_paths)
+        row = SegmentFrameImage(
+            frame_image_id=f"frm-{_uuid()}",
+            project_id=pid,
+            segment_key=key,
+            version_no=len(self.ctx.frames.list_by_segment(pid, key)) + 1,
+            view_label=STORYBOARD_GRID_LABEL,
+            prompt="storyboard grid",
+            provider="pillow",
+            file_path=rel,
+            reference_paths=list(cell_paths),
+            status=AssetImageStatus.READY,
+            # 宫格由程序从已批准格子拼出，自动视为已批准（无需二次确认）
+            approved=True,
+        )
+        self.ctx.frames.add(row)
+        return row
 
     def auto_reference_cards(self, pid: str, segment) -> list[str]:
         """页面展示用：该段自动选中的参考图（相对路径，编图生图通道未启用时为空）。"""
@@ -1733,11 +1795,28 @@ class WorkbenchService:
         return CommandResult(ok=True, frame_image=row)
 
     def cmd_delete_frame_image(self, project, payload) -> CommandResult:
-        """删除关键帧（清理旧版本）：只删库行，磁盘文件保留可恢复。"""
+        """删除关键帧（清理旧版本）：只删库行，磁盘文件保留可恢复。
+
+        删的是格子行（grid_cell 非 None）→ 删后同步宫格：旧板作废，剩余格
+        仍就绪则重拼，否则不留半成品宫格。
+        """
         row = self.ctx.frames.get(str(payload.get("frame_image_id", "")))
         if row is None or row.project_id != project.project_id:
             raise DomainError("NOT_FOUND", f"关键帧不存在：{payload.get('frame_image_id')}")
+        was_cell = row.grid_cell is not None
+        seg_key = row.segment_key
         self.ctx.frames.delete(row.frame_image_id)
+        if was_cell:
+            segment = next(
+                (
+                    s
+                    for s in self._active_segments(project.project_id)[1]
+                    if s.segment_key == seg_key
+                ),
+                None,
+            )
+            if segment is not None:
+                self._sync_storyboard_grid(project, segment)
         return CommandResult(ok=True)
 
     def cmd_approve_frame_image(self, project, payload) -> CommandResult:
@@ -1752,6 +1831,18 @@ class WorkbenchService:
             raise DomainError("STATE_ILLEGAL", "只有 ready/uploaded 图片可批准")
         row.approved = approved
         self.ctx.frames.save(row)
+        if row.grid_cell is not None:
+            # 格子批准状态变化 → 同步宫格（全格就绪时重拼，否则作废旧板）
+            segment = next(
+                (
+                    s
+                    for s in self._active_segments(project.project_id)[1]
+                    if s.segment_key == row.segment_key
+                ),
+                None,
+            )
+            if segment is not None:
+                self._sync_storyboard_grid(project, segment)
         return CommandResult(ok=True, frame_image=row)
 
     def cmd_approve_keyframes(self, project, payload) -> CommandResult:
@@ -1761,7 +1852,7 @@ class WorkbenchService:
         missing = [
             s.segment_key
             for s in segments
-            if self._approved_keyframe(project.project_id, s.segment_key) is None
+            if self._approved_anchor_frame(project.project_id, s.segment_key) is None
         ]
         if missing and not bool(payload.get("allow_tail_fallback")):
             raise ReferenceMissingError(
@@ -1788,7 +1879,7 @@ class WorkbenchService:
         图——不取「最新」。顺序即上传顺序，任何重排都会破坏提示词编号。
         返回 (reference_paths, mode, keyframe_path|None)。
         """
-        keyframe = self._approved_keyframe(project.project_id, segment.segment_key)
+        keyframe = self._approved_anchor_frame(project.project_id, segment.segment_key)
         resolved: list[tuple[str, AssetKind, str, str]] = []
         missing: list[str] = []
         for ref in segment.asset_refs:
