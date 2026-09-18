@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile
 
 from server.api.serializers import (
     asset_dto,
@@ -339,14 +339,23 @@ def upload_frame(
     pid: str,
     segment_key: str,
     file: Annotated[UploadFile, File()],
+    cell_no: Annotated[int | None, Form()] = None,
 ):
-    """上传段关键帧（绕过生成，直接可批准；TASK-031）。"""
+    """上传段关键帧（绕过生成，直接可批准；TASK-031）。
+
+    多宫格方案A：cell_no 为可选格号（1 起），上传的是某格的替换图时带上。
+    """
     content = file.read()
     ext = "." + (file.filename or "upload.png").rsplit(".", 1)[-1].lower()
     result = _svc(request).dispatch(
         pid,
         "upload_frame_image",
-        {"segment_key": segment_key, "content": content, "ext": ext},
+        {
+            "segment_key": segment_key,
+            "content": content,
+            "ext": ext,
+            "cell_no": cell_no,
+        },
     )
     return {"ok": True, "frame_image": frame_image_dto(result["frame_image"])}
 

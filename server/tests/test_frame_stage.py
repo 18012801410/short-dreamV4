@@ -846,3 +846,163 @@ def test_grid_empty_cell_list_raises(tmp_path) -> None:
     settings = _make_grid_settings(tmp_path)
     with pytest.raises(ValueError, match="至少一张格子图"):
         _compose_storyboard_grid(settings, "p1", "S01G01", [])
+
+
+# --------------------------------------------------------------------------
+# 多宫格分镜板 Task5：入队逐格化（批量/单抽/上传带格号；重抽格作废旧宫格行）
+# --------------------------------------------------------------------------
+
+
+def _two_shot_grid_segment() -> "Segment":
+    """2-shot 段夹具：两镜 action 文案互斥（第 1 镜独有 unties the rope，
+    第 2 镜独有 steps onto the boat），编译后仍保留，可作 prompt 泄漏断言。"""
+    from server.domain.entities import H3Prompt, Segment, Shot
+
+    return Segment(
+        segment_key="S01G01",
+        scene_id="S1",
+        index=1,
+        duration_sec=10,
+        shots=[
+            Shot(shot_no=1, cutpoint_sec=4.0, camera="wide",
+                 description="at the pier",
+                 action="the old ferryman unties the rope at the pier"),
+            Shot(shot_no=2, cutpoint_sec=10.0, camera="close",
+                 description="pushes off",
+                 action="the old ferryman steps onto the boat"),
+        ],
+        keyframe_description="",
+        h3_prompt=H3Prompt(text=""),
+    )
+
+
+def _single_shot_grid_segment() -> "Segment":
+    """1-shot 段夹具：走旧单帧口径（grid_cell 必须为 None）。"""
+    from server.domain.entities import H3Prompt, Segment, Shot
+
+    return Segment(
+        segment_key="S01G01",
+        scene_id="S1",
+        index=1,
+        duration_sec=5,
+        shots=[Shot(shot_no=1, cutpoint_sec=0.0, camera="wide",
+                    description="at the pier")],
+        keyframe_description="Wide shot of the pier at night.",
+        h3_prompt=H3Prompt(text=""),
+    )
+
+
+def _grid_enqueue_fixture(tmp_path, segments, *, through_keyframes: bool = False):
+    """逐格入队夹具：tmp 库 + 状态直推分镜已批准（可选再过关键帧门）+ active 分镜。"""
+    import sqlalchemy as sa
+
+    from server.app.context import AppContext
+    from server.app.usecases import WorkbenchService
+    from server.domain.enums import WorkStatus
+    from server.domain.project import apply_action as _apply
+    from server.infra.config import Settings
+    from server.infra.tables import metadata
+
+    settings = Settings(data_dir=tmp_path, _env_file=None)
+    settings.media_dir.mkdir(parents=True, exist_ok=True)
+    engine = sa.create_engine(
+        f"sqlite:///{tmp_path/'grid_enqueue.db'}", connect_args={"check_same_thread": False}
+    )
+    metadata.create_all(engine)
+    ctx = AppContext.build(settings, engine)
+    svc = WorkbenchService(ctx)
+    pid = svc.create_project("渡口", "想法", {}).project_id
+    moved = ctx.projects.get(pid)
+    actions = ["generate_script", "script_generated", "approve_script",
+               "generate_assets", "assets_generated", "approve_assets",
+               "generate_storyboard", "storyboard_generated", "approve_storyboard"]
+    if through_keyframes:
+        actions.append("generate_keyframes")
+    for action in actions:
+        moved = _apply(moved, action)
+    ctx.projects.save(moved)
+    from server.domain.entities import StoryboardContent, StoryboardVersion
+
+    ctx.storyboards.add(
+        StoryboardVersion(
+            storyboard_version_id="sbv-grid", project_id=pid, version_no=1,
+            content=StoryboardContent(segments=list(segments)),
+            status=WorkStatus.ACTIVE,
+        )
+    )
+    return svc, ctx, pid
+
+
+def test_batch_generates_one_job_per_shot(tmp_path) -> None:
+    """2-shot 段批量生成 → 2 个 frame_gen 任务、行 grid_cell={1,2}；
+    第 2 格提示词只含第 2 镜动作，第 1 镜独有内容不泄漏。"""
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_two_shot_grid_segment()])
+    result = svc.dispatch(pid, "generate_keyframes", {})
+    assert len(result["jobs"]) == 2
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    assert sorted(r.grid_cell for r in rows) == [1, 2]
+    row1 = next(r for r in rows if r.grid_cell == 1)
+    row2 = next(r for r in rows if r.grid_cell == 2)
+    assert "unties the rope" in row1.prompt
+    assert "steps onto the boat" in row2.prompt
+    assert "unties the rope" not in row2.prompt
+
+
+def test_single_shot_segment_keeps_legacy(tmp_path) -> None:
+    """1-shot 段批量 → 1 个任务、行 grid_cell=None（旧单帧口径完全不变）。"""
+    svc, ctx, pid = _grid_enqueue_fixture(tmp_path, [_single_shot_grid_segment()])
+    result = svc.dispatch(pid, "generate_keyframes", {})
+    assert len(result["jobs"]) == 1
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    assert len(rows) == 1
+    assert rows[0].grid_cell is None
+
+
+def test_reroll_with_cell_no(tmp_path) -> None:
+    """单抽重生成带 cell_no=2 → 新行 grid_cell=2，提示词含第 2 镜动作描述。"""
+    svc, ctx, pid = _grid_enqueue_fixture(
+        tmp_path, [_two_shot_grid_segment()], through_keyframes=True
+    )
+    result = svc.dispatch(pid, "generate_frame_image",
+                          {"segment_key": "S01G01", "cell_no": 2})
+    assert len(result["jobs"]) == 1
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    assert len(rows) == 1
+    assert rows[0].grid_cell == 2
+    assert "steps onto the boat" in rows[0].prompt
+
+
+def test_upload_with_cell_no(tmp_path) -> None:
+    """上传关键帧行带 cell_no=1 → 行 grid_cell=1（页面上传格子图通道）。"""
+    svc, ctx, pid = _grid_enqueue_fixture(
+        tmp_path, [_two_shot_grid_segment()], through_keyframes=True
+    )
+    svc.dispatch(pid, "upload_frame_image", {
+        "segment_key": "S01G01", "content": b"png-bytes", "ext": ".png", "cell_no": 1,
+    })
+    rows = ctx.frames.list_by_segment(pid, "S01G01")
+    assert len(rows) == 1
+    assert rows[0].grid_cell == 1
+
+
+def test_reroll_invalidates_grid(tmp_path) -> None:
+    """段内已有分镜板宫格行时对格子重抽 → 宫格行被删除（T4 挂账修复）。"""
+    from server.domain.entities import STORYBOARD_GRID_LABEL, SegmentFrameImage
+    from server.domain.enums import AssetImageStatus
+
+    svc, ctx, pid = _grid_enqueue_fixture(
+        tmp_path, [_two_shot_grid_segment()], through_keyframes=True
+    )
+    ctx.frames.add(
+        SegmentFrameImage(
+            frame_image_id="frm-grid", project_id=pid, segment_key="S01G01",
+            version_no=1, view_label=STORYBOARD_GRID_LABEL,
+            prompt="storyboard grid", provider="pillow",
+            file_path=f"{pid}/storyboards/S01G01_grid_old.jpg",
+            status=AssetImageStatus.READY, approved=True,
+        )
+    )
+    svc.dispatch(pid, "generate_frame_image", {"segment_key": "S01G01", "cell_no": 1})
+    remaining = ctx.frames.list_by_segment(pid, "S01G01")
+    assert all(r.view_label != STORYBOARD_GRID_LABEL for r in remaining)
+    assert any(r.grid_cell == 1 for r in remaining)  # 重抽格本身还在

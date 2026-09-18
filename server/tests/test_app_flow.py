@@ -379,11 +379,16 @@ def test_full_pipeline_to_composed(flow) -> None:
 
     # 关键帧（TASK-031）：生成 → 确认门。本测显式走「缺帧回退尾帧接力」分支，
     # 保留连续性依赖链断言；关键帧优先分支见 test_keyframe_priority_over_tail_frame
+    # 多宫格方案A（T5）：S01G02 是 2-shot 段 → 逐格生成 2 张；单镜段仍 1 张
     svc.dispatch(project.project_id, "generate_keyframes")
     run_until_idle(worker)
     assert ctx.projects.get(project.project_id).status is ProjectStatus.FRAME_READY
     frames = ctx.frames.list_by_project(project.project_id)
-    assert len(frames) == 3 and all(f.status.value == "ready" for f in frames)
+    assert len(frames) == 4 and all(f.status.value == "ready" for f in frames)
+    s01g02_cells = sorted(
+        f.grid_cell for f in frames if f.segment_key == "S01G02"
+    )
+    assert s01g02_cells == [1, 2]
     # 未批准时确认门必须拦截（不静默降级）
     from server.domain.errors import ReferenceMissingError
 

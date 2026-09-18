@@ -38,6 +38,7 @@ from server.domain.entities import (
     Series,
     SeriesOutline,
     SeriesParams,
+    STORYBOARD_GRID_LABEL,
     StoryboardContent,
     StoryboardVersion,
     utcnow,
@@ -62,6 +63,7 @@ from server.domain.outline_quality import hard_gate_issues, validate_series_outl
 from server.domain.project import apply_action, apply_stage_invalidated
 from server.domain.textnorm import negative_for_kind
 from server.domain.validation import (
+    MAX_GRID_CELLS,
     truncate_references,
     validate_asset_set,
     validate_segment,
@@ -1461,6 +1463,7 @@ class WorkbenchService:
         seed: int | None = None,
         prompt_override: str = "",
         reference_image_ids: list[str] | None = None,
+        cell_no: int | None = None,
     ) -> Job:
         """编译该段关键帧生图提示词、登记 SegmentFrameImage 并入队 frame_gen。
 
@@ -1469,11 +1472,18 @@ class WorkbenchService:
         （画面内角色卡 + 场景卡）。实际使用的参考图记进帧行，供页面摊开展示。
         TASK-036：有角色卡参考图时正文不写身份串（身份交给参考图，提示词专注画面）。
         seed 未显式给定时随机化（固定种子会让「重新生成」出一模一样的图）。
+        多宫格方案A：cell_no 非 None 时该行是格子行，画面描述取对应 shot 的
+        动作（action→description 回退），并在入队前作废旧宫格分镜板。
         """
         from server.app.h3_compiler import KEYFRAME_NEGATIVE, compile_keyframe_prompt
 
         if seed is None:
             seed = _random_seed()
+        # 逐格口径：格子的画面描述来自对应 shot，不再固定读 keyframe_description
+        cell_description = ""
+        if cell_no is not None:
+            shot = segment.shots[cell_no - 1]
+            cell_description = shot.action.strip() or shot.description.strip()
         assets_by_id = {
             a.asset_id: a for a in self.ctx.assets.list_assets(project.project_id)
         }
@@ -1509,6 +1519,7 @@ class WorkbenchService:
                 include_identity_anchors=not reference_rel_paths,
                 reference_bindings=reference_bindings,
                 aspect=project.params.ratio,
+                description_override=cell_description,
             )
         width, height = size_for_asset_card(project.params.ratio)
         row_id = f"frm-{_uuid()}"
@@ -1522,9 +1533,13 @@ class WorkbenchService:
             + 1,
             prompt=prompt,
             reference_paths=list(reference_rel_paths),
+            grid_cell=cell_no,
             status=AssetImageStatus.GENERATING,
         )
         self.ctx.frames.add(frame_row)
+        if cell_no is not None:
+            # 重抽格 → 旧宫格分镜板作废（全部格重新批准后由 approve 流程重拼）
+            self._invalidate_storyboard_grid(project.project_id, segment.segment_key)
         payload = {
             "frame_image_id": row_id,
             "prompt": prompt,
@@ -1544,6 +1559,12 @@ class WorkbenchService:
         )
         self.ctx.jobs.insert(job)
         return job
+
+    def _invalidate_storyboard_grid(self, pid: str, key: str) -> None:
+        """作废该段宫格分镜板行（重抽格后旧拼图失效，由 approve 流程重拼）。"""
+        for row in self.ctx.frames.list_by_segment(pid, key):
+            if row.view_label == STORYBOARD_GRID_LABEL:
+                self.ctx.frames.delete(row.frame_image_id)
 
     def auto_reference_cards(self, pid: str, segment) -> list[str]:
         """页面展示用：该段自动选中的参考图（相对路径，编图生图通道未启用时为空）。"""
@@ -1604,7 +1625,12 @@ class WorkbenchService:
 
     def cmd_generate_keyframes(self, project, payload) -> CommandResult:
         """逐段入队关键帧生成；已批准/更晚阶段重生成走 FR-016 失效回退
-        （忙碌态不放开），旧关键帧版本保留可回批。"""
+        （忙碌态不放开），旧关键帧版本保留可回批。
+
+        多宫格方案A：单镜段保持旧单帧口径（1 个任务、无格号）；多镜段逐格
+        入队，每格画面描述取对应 shot，最多 MAX_GRID_CELLS 格（超出的镜头
+        交给视频模型按提示词发挥）。
+        """
         if project.status in {
             ProjectStatus.FRAME_APPROVED,
             ProjectStatus.VIDEO_READY,
@@ -1614,7 +1640,14 @@ class WorkbenchService:
             self.ctx.projects.save(project)
         moved = apply_action(project, "generate_keyframes")
         _, segments = self._active_segments(project.project_id)
-        jobs = [self._enqueue_frame_job(moved, seg) for seg in segments]
+        jobs: list[Job] = []
+        for seg in segments:
+            if len(seg.shots) == 1:
+                # 单镜段：无宫格价值，保持旧单帧口径
+                jobs.append(self._enqueue_frame_job(moved, seg))
+                continue
+            for cell_no in range(1, min(len(seg.shots), MAX_GRID_CELLS) + 1):
+                jobs.append(self._enqueue_frame_job(moved, seg, cell_no=cell_no))
         self.ctx.projects.save(moved)
         return CommandResult(jobs=jobs)
 
@@ -1623,6 +1656,8 @@ class WorkbenchService:
 
         可覆盖：prompt（整段生图提示词，页面改完即用）、reference_asset_image_ids
         （手工指定参考图，按给定顺序）、extra_prompt（在编译提示词后追加）、seed。
+        多宫格方案A：payload 带 cell_no（1 起）时按对应 shot 重抽该格，并入队前
+        作废旧宫格分镜板。
         """
         _, segments = self._active_segments(project.project_id)
         key = str(payload.get("segment_key", ""))
@@ -1633,6 +1668,8 @@ class WorkbenchService:
         prompt_override = str(payload.get("prompt") or "")
         seed_payload = payload.get("seed")
         seed = int(seed_payload) if seed_payload not in (None, "") else None
+        raw_cell = payload.get("cell_no")
+        cell_no = int(raw_cell) if raw_cell not in (None, "") else None
         raw_images = payload.get("reference_asset_image_ids")
         reference_image_ids = (
             [str(i) for i in raw_images] if isinstance(raw_images, list) else None
@@ -1644,17 +1681,23 @@ class WorkbenchService:
             seed=seed,
             prompt_override=prompt_override,
             reference_image_ids=reference_image_ids,
+            cell_no=cell_no,
         )
         return CommandResult(jobs=[job])
 
     def cmd_upload_frame_image(self, project, payload) -> CommandResult:
-        """multipart 上传关键帧：payload 携带已读字节与元数据（路由层组装）。"""
+        """multipart 上传关键帧：payload 携带已读字节与元数据（路由层组装）。
+
+        多宫格方案A：payload 带 cell_no（1 起）时该行标记为对应格子的上传行。
+        """
         _, segments = self._active_segments(project.project_id)
         key = str(payload.get("segment_key", ""))
         if not any(s.segment_key == key for s in segments):
             raise DomainError("NOT_FOUND", f"段不存在：{key}")
         content: bytes = payload["content"]
         ext = str(payload.get("ext") or ".png")
+        raw_cell = payload.get("cell_no")
+        cell_no = int(raw_cell) if raw_cell not in (None, "") else None
         image_id = _uuid()
         rel = uploaded_frame_rel(project.project_id, image_id, ext)
         abs_media_path(self.ctx.settings, rel).parent.mkdir(parents=True, exist_ok=True)
@@ -1668,6 +1711,7 @@ class WorkbenchService:
             prompt="",
             provider="upload",
             file_path=rel,
+            grid_cell=cell_no,
             status=AssetImageStatus.UPLOADED,
         )
         self.ctx.frames.add(row)
